@@ -1,2 +1,4 @@
 build/
 .env
+config.cmake
+include/
