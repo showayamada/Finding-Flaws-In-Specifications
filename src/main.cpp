@@ -42,9 +42,12 @@
 #include <spot/twa/twaproduct.hh>
 #include <numeric>
 #include <spot/twaalgos/product.hh>
+#include <boost/array.hpp>
+#include <algorithm>
 
 using namespace std;
 using namespace spot;
+using namespace boost;
 
 twa_graph_ptr p(twa_graph_ptr left, twa_graph_ptr right, twa_graph_ptr shared, vector<string>& name) {
     twa_graph_ptr producted = make_twa_graph(shared->get_dict());
@@ -159,13 +162,30 @@ int main() {
     producted_ofs.close();
 
     // デバッグ用
-    cout << "====================DEBUG====================" << endl;
-    cout<< "なまえ" << endl;
-    for (size_t i = 0; i < name.size(); i++) {
-        cout << i << " : " << name[i] << endl;
-    }
-    automaton_producted->get_dict()->dump(cout);
-    print_hoa(cout, automaton_producted);
+    // cout << "====================DEBUG====================" << endl;
+    // cout<< "なまえ" << endl;
+    // for (size_t i = 0; i < name.size(); i++) {
+    //     cout << i << " : " << name[i] << endl;
+    // }
+    // automaton_producted->get_dict()->dump(cout);
+    // print_hoa(cout, automaton_producted);
+
+    // 命題変数を要求イベントだけに制限
+    auto p_dict = automaton_producted->get_dict();
+    for (string res: responseEvents) {
+        parsed_formula res_parsed = parse_infix_psl(res);
+        int res_BDD_index = dict->var_map[res_parsed.f];
+        for (auto& t: automaton_producted->edges()) {
+            bdd res_BDD = bdd_ithvar(res_BDD_index);
+            t.cond = bdd_exist(t.cond, res_BDD);
+        }
+    }    
+    // デバッグ用
+    // cout << "====================DEBUG====================" << endl;
+    // print_hoa(cout, automaton_producted);
+
+    // 有向閉路グラフ(DCG)の作成
+
 
     return 0;
 }
