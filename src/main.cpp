@@ -85,11 +85,11 @@ using namespace boost;
 // }
 
 struct ParseCounterexample {
-    string single_expr;
-    string a;
-    // vector<string> w_expr;
+    vector<string> events;
+    // string a;
+    vector<string> w_events;
 };
-BOOST_FUSION_ADAPT_STRUCT(ParseCounterexample, single_expr, a);
+BOOST_FUSION_ADAPT_STRUCT(ParseCounterexample, events, w_events);
 
 template <typename Iterator>
 struct CounterexampleGrammar : spirit::qi::grammar<Iterator, ParseCounterexample(), spirit::qi::space_type> {
@@ -104,18 +104,20 @@ struct CounterexampleGrammar : spirit::qi::grammar<Iterator, ParseCounterexample
         using spirit::qi::int_;
         using spirit::qi::attr;
         using spirit::qi::eps;
-        expr = '{' >> single_expr >> lit("}{") >> a >> '}';        
-        single_expr = lexeme[(char_("a-zA-Z") >> *char_("a-zA-Z0-9"))];
-        a = lexeme[(char_("a-zA-Z") >> *char_("a-zA-Z0-9"))];
+        expr = events >> w_events;        
+        single_expr = '{' >> lexeme[(char_("a-zA-Z") >> *char_("a-zA-Z0-9"))] >> '}';
+        w_events = '(' >> +single_expr >> ')';
+        events %= +single_expr;
         // start %= '{' >> lexeme[(char_("a-zA-Z") >> *char_("a-zA-Z0-9"))] >> '}';
         // start %= '{' >> single_expr >> '}' >> '{' >> and_expr >> '}' >> w_expr;
         // single_expr %= lexeme[(char_("a-zA-Z") >> *char_("a-zA-Z0-9"))];
         // and_expr %= single_expr >> '&' >> single_expr;
-        // w_expr %=  '(' >> (and_expr % ',') >> ')';
+        // w_expr %= +single_expr;
     }
     spirit::qi::rule<Iterator, ParseCounterexample(), spirit::qi::space_type> expr;
+    spirit::qi::rule<Iterator, vector<string>(), spirit::qi::space_type> events;
+    spirit::qi::rule<Iterator, vector<string>(), spirit::qi::space_type> w_events;
     spirit::qi::rule<Iterator, string(), spirit::qi::space_type> single_expr;
-    spirit::qi::rule<Iterator, string(), spirit::qi::space_type> a;
 
     // spirit::qi::rule<Iterator, string(), spirit::qi::space_type> and_expr;
     // spirit::qi::rule<Iterator, vector<string>(), spirit::qi::space_type> w_expr;
@@ -206,15 +208,19 @@ int main() {
 
     vector<string> responseEvents = {"y"};
     // string counterexample = "{x2}{x2,x3}({x1,x2},{x2,x3})";
-    string counterexample = "{x2222}{x2}";
+    string counterexample = "{x2222}{x2}({aaa}{bbb})";
     CounterexampleGrammar<string::iterator> grammar;
     ParseCounterexample counterexample_parsed;
     auto iter = counterexample.begin();
     auto end = counterexample.end();
     bool success = spirit::qi::phrase_parse(iter, end, grammar, spirit::qi::space, counterexample_parsed);
     if (success) {
-        cout << counterexample_parsed.single_expr << endl;
-        cout << counterexample_parsed.a << endl;
+        for (auto e: counterexample_parsed.events) {
+            cout << "e: " << e << endl;
+        }
+        for (auto w: counterexample_parsed.w_events) {
+            cout << "w: " << w << endl;
+        }
         // cout << "success" << endl;
         // cout << counterexample_parsed.single_expr << endl;
         // cout << counterexample_parsed.and_expr << endl;
