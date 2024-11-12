@@ -86,7 +86,6 @@ using namespace boost;
 
 struct ParseCounterexample {
     vector<string> events;
-    // string a;
     vector<string> w_events;
 };
 BOOST_FUSION_ADAPT_STRUCT(ParseCounterexample, events, w_events);
@@ -105,27 +104,15 @@ struct CounterexampleGrammar : spirit::qi::grammar<Iterator, ParseCounterexample
         using spirit::qi::attr;
         using spirit::qi::eps;
         expr = events >> w_events;        
-        single_expr = '{' >> lexeme[(char_("a-zA-Z") >> *char_("a-zA-Z0-9"))] >> '}';
+        single_expr = '{' >> lexeme[(char_("a-zA-Z") >> *char_("a-zA-Z0-9"))] >> *lexeme[(char_(','))] >> *lexeme[(char_("a-zA-Z") >> *char_("a-zA-Z0-9"))] >> '}';
         w_events = '(' >> +single_expr >> ')';
         events %= +single_expr;
-        // start %= '{' >> lexeme[(char_("a-zA-Z") >> *char_("a-zA-Z0-9"))] >> '}';
-        // start %= '{' >> single_expr >> '}' >> '{' >> and_expr >> '}' >> w_expr;
-        // single_expr %= lexeme[(char_("a-zA-Z") >> *char_("a-zA-Z0-9"))];
-        // and_expr %= single_expr >> '&' >> single_expr;
-        // w_expr %= +single_expr;
     }
     spirit::qi::rule<Iterator, ParseCounterexample(), spirit::qi::space_type> expr;
     spirit::qi::rule<Iterator, vector<string>(), spirit::qi::space_type> events;
     spirit::qi::rule<Iterator, vector<string>(), spirit::qi::space_type> w_events;
     spirit::qi::rule<Iterator, string(), spirit::qi::space_type> single_expr;
-
-    // spirit::qi::rule<Iterator, string(), spirit::qi::space_type> and_expr;
-    // spirit::qi::rule<Iterator, vector<string>(), spirit::qi::space_type> w_expr;
-    // spirit::qi::rule<Iterator, int(), spirit::qi::space_type> int_parser;
-    // spirit::qi::rule<Iterator, double(), spirit::qi::space_type> double_parser;
 };
-
-
 
 twa_graph_ptr p(twa_graph_ptr left, twa_graph_ptr right, twa_graph_ptr shared, vector<string>& name) {
     twa_graph_ptr producted = make_twa_graph(shared->get_dict());
@@ -168,7 +155,6 @@ twa_graph_ptr p(twa_graph_ptr left, twa_graph_ptr right, twa_graph_ptr shared, v
             }
         }
     }
-
     return producted;
 }
 
@@ -207,8 +193,8 @@ int main() {
     auto dict = shared->get_dict();
 
     vector<string> responseEvents = {"y"};
-    // string counterexample = "{x2}{x2,x3}({x1,x2},{x2,x3})";
-    string counterexample = "{x2222}{x2}({aaa}{bbb})";
+    // string counterexample = "{x2}{x2,x3}({x1,x2}{x2,x3})";
+    string counterexample = "{x2222}{x2,x4}{event}({aaa}{bbb})";
     CounterexampleGrammar<string::iterator> grammar;
     ParseCounterexample counterexample_parsed;
     auto iter = counterexample.begin();
@@ -221,12 +207,6 @@ int main() {
         for (auto w: counterexample_parsed.w_events) {
             cout << "w: " << w << endl;
         }
-        // cout << "success" << endl;
-        // cout << counterexample_parsed.single_expr << endl;
-        // cout << counterexample_parsed.and_expr << endl;
-        // for (auto w: counterexample_parsed.w_expr) {
-        //     cout << w << endl;
-        // }
     } else {
         cout << "Parsing failed." << endl;
     }
