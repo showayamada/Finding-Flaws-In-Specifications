@@ -44,10 +44,75 @@
 #include <spot/twaalgos/product.hh>
 #include <boost/array.hpp>
 #include <algorithm>
+#include <boost/graph/adjacency_list.hpp>
+#include <boost/graph/graph_traits.hpp>
+#include <boost/graph/graphviz.hpp>
+#include <boost/graph/adjacency_iterator.hpp>
+#include <boost/graph/adjacency_matrix.hpp>
+#include <boost/graph/adj_list_serialize.hpp>
+#include <boost/spirit/include/qi.hpp>
+#include <boost/spirit/include/qi_char_class.hpp>
+#include <boost/spirit/include/qi_lit.hpp>
+#include <boost/fusion/include/std_pair.hpp>
+#include <unordered_map>
 
 using namespace std;
 using namespace spot;
 using namespace boost;
+
+// typedef boost::adjacency_list<boost::vecS, boost::vecS, boost::directedS> Graph;
+// typedef boost::graph_traits<Graph>::vertex_descriptor Vertex;
+// struct Node {
+//     twa_graph_state* state;
+//     string counterexample_part;
+//     bool operator==(const Node& other) const {
+//         return state == other.state && counterexample_part == other.counterexample_part;
+//     }
+// };
+// typedef std::unordered_map<Node, Vertex> NodeMap;
+// namespace std {
+//     template <>
+//     struct hash<Node> {
+//         size_t operator()(const Node& node) const {
+//             return hash<state*>()(node.state) ^ hash<string>()(node.counterexample_part);
+//         }
+//     };
+// }
+
+// void create_dcg(twa_graph_ptr automaton, const string& counterexample, Graph& g, NodeMap& node_map){
+//     auto init_state = automaton->get_init_state();
+//     Node init_node{init_state, counterexample};
+// }
+
+struct ParseCounterexample {
+    vector<string> events;
+    vector<string> w_events;
+};
+BOOST_FUSION_ADAPT_STRUCT(ParseCounterexample, events, w_events);
+
+template <typename Iterator>
+struct CounterexampleGrammar : spirit::qi::grammar<Iterator, ParseCounterexample(), spirit::qi::space_type> {
+    CounterexampleGrammar() : CounterexampleGrammar::base_type(expr) {
+        using spirit::qi::lit;
+        using spirit::qi::char_;
+        using spirit::qi::lexeme;
+        using spirit::qi::alpha;
+        using spirit::qi::alnum;
+        using spirit::qi::space;
+        using spirit::qi::repeat;
+        using spirit::qi::int_;
+        using spirit::qi::attr;
+        using spirit::qi::eps;
+        expr = events >> w_events;        
+        single_expr = '{' >> lexeme[(char_("a-zA-Z") >> *char_("a-zA-Z0-9"))] >> *lexeme[(char_(','))] >> *lexeme[(char_("a-zA-Z") >> *char_("a-zA-Z0-9"))] >> '}';
+        w_events = '(' >> +single_expr >> ')';
+        events %= +single_expr;
+    }
+    spirit::qi::rule<Iterator, ParseCounterexample(), spirit::qi::space_type> expr;
+    spirit::qi::rule<Iterator, vector<string>(), spirit::qi::space_type> events;
+    spirit::qi::rule<Iterator, vector<string>(), spirit::qi::space_type> w_events;
+    spirit::qi::rule<Iterator, string(), spirit::qi::space_type> single_expr;
+};
 
 twa_graph_ptr p(twa_graph_ptr left, twa_graph_ptr right, twa_graph_ptr shared, vector<string>& name) {
     twa_graph_ptr producted = make_twa_graph(shared->get_dict());
@@ -89,9 +154,7 @@ twa_graph_ptr p(twa_graph_ptr left, twa_graph_ptr right, twa_graph_ptr shared, v
                 }
             }
         }
-
     }
-
     return producted;
 }
 
@@ -109,7 +172,6 @@ twa_graph_ptr synchronous_product(vector<twa_graph_ptr> automatons, twa_graph_pt
     }
     return producted;
 }
-
 
 int main() {
     // LTL式の入力
@@ -131,6 +193,25 @@ int main() {
     auto dict = shared->get_dict();
 
     vector<string> responseEvents = {"y"};
+    // string counterexample = "{x2}{x2,x3}({x1,x2}{x2,x3})";
+    string counterexample = "{x2222}{x2,x4}{event}({aaa}{bbb})";
+    CounterexampleGrammar<string::iterator> grammar;
+    ParseCounterexample counterexample_parsed;
+    auto iter = counterexample.begin();
+    auto end = counterexample.end();
+    bool success = spirit::qi::phrase_parse(iter, end, grammar, spirit::qi::space, counterexample_parsed);
+    if (success) {
+        for (auto e: counterexample_parsed.events) {
+            cout << "e: " << e << endl;
+        }
+        for (auto w: counterexample_parsed.w_events) {
+            cout << "w: " << w << endl;
+        }
+    } else {
+        cout << "Parsing failed." << endl;
+    }
+    return 0;
+
     vector<twa_graph_ptr> automaton_list = {};
     cout << "入力 LTL : " << endl;
     for (size_t i = 0; i < ltl_formula_str_list.size(); i++) {
@@ -181,11 +262,42 @@ int main() {
         }
     }    
     // デバッグ用
-    // cout << "====================DEBUG====================" << endl;
-    // print_hoa(cout, automaton_producted);
+    cout << "====================DEBUG====================" << endl;
+    print_hoa(cout, automaton_producted);
+    ofstream projected("projected.hoa");
+    print_hoa(projected, automaton_producted);
+    projected.close();
 
     // 有向閉路グラフ(DCG)の作成
+    // Graph dcg;
+    // VertexMap vertex_map;
 
+
+
+    // map<int, Graph::vertex_descriptor> desc;
+    // auto V = automaton_producted->states();
+    // vector<spot::internal::distate_storage<unsigned int, spot::internal::boxed_label<spot::twa_graph_state>>> V_prime;
+    // twa_graph::edge_storage_t E;
+    // twa_graph::edge_storage_t E_prime; 
+    // while(V != V_prime || E != E_prime) {
+    //     V_prime = V;
+    //     E_prime = E;
+    //     for (size_t i = 0; i < automaton_producted->states().size(); i++) {
+    //         for (auto& t: automaton_producted->out(i)) {
+    //             string src = to_string(i);
+    //             string dst= to_string(t.dst);
+    //             if (head(i)|= b) {
+    //                 // 新しいノードとエッジを追加
+    //                 desc[i] = add_vertex(dcg); 
+    //                 add_edge()
+    //             }
+    //         }
+    //     }
+
+    // }
+
+    ofstream dcg_ofs("projected.dot");
+    print_dot(dcg_ofs, automaton_producted);
 
     return 0;
 }
