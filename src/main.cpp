@@ -55,13 +55,20 @@
 #include <boost/spirit/include/qi_lit.hpp>
 #include <boost/fusion/include/std_pair.hpp>
 #include <unordered_map>
+#include <boost/utility.hpp>
+#include <boost/foreach.hpp>
 
 using namespace std;
 using namespace spot;
 using namespace boost;
 
-// typedef boost::adjacency_list<boost::vecS, boost::vecS, boost::directedS> Graph;
-// typedef boost::graph_traits<Graph>::vertex_descriptor Vertex;
+// edge property
+struct EdgeProperty {
+    string label;
+};
+typedef boost::adjacency_list<vecS, vecS, directedS, no_property, EdgeProperty> CEGraph;
+typedef boost::adjacency_list<boost::vecS, boost::vecS, boost::directedS> Graph;
+typedef boost::graph_traits<CEGraph>::edge_descriptor EdgeDescriptor;
 // struct Node {
 //     twa_graph_state* state;
 //     string counterexample_part;
@@ -113,6 +120,41 @@ struct CounterexampleGrammar : spirit::qi::grammar<Iterator, ParseCounterexample
     spirit::qi::rule<Iterator, vector<string>(), spirit::qi::space_type> w_events;
     spirit::qi::rule<Iterator, string(), spirit::qi::space_type> single_expr;
 };
+
+typedef graph_traits<CEGraph>::edge_iterator edge_iter;
+
+string head(CEGraph& g, int tail = -1) {
+    int next;
+    edge_iter e, eend;
+    for (tie(e, eend) = edges(g); e != eend; e++) {
+        if (tail == -1 && source(*e, g) == 0) {
+            EdgeProperty ceg = g[*e];
+            cout << "label: " << ceg.label << endl;
+            return ceg.label;
+        } else if (source(*e, g) == tail) {
+            next = target(*e, g);
+        }
+    }
+    for (tie(e, eend) = edges(g); e != eend; e++) {
+        if (source(*e, g) == next) {
+            EdgeProperty ceg = g[*e];
+            cout << "label: " << ceg.label << endl;
+            return ceg.label;
+        }
+    }
+    return "error";
+}
+
+int tail(CEGraph& g , int head) {
+    edge_iter e, eend;
+    for (tie(e, eend) = edges(g); e != eend; e++) {
+        if (source(*e, g) == head) {
+            cout << "tail: " << target(*e, g) << endl;
+            return target(*e, g);
+        }
+    }
+    return -1;
+}
 
 twa_graph_ptr p(twa_graph_ptr left, twa_graph_ptr right, twa_graph_ptr shared, vector<string>& name) {
     twa_graph_ptr producted = make_twa_graph(shared->get_dict());
@@ -193,8 +235,7 @@ int main() {
     auto dict = shared->get_dict();
 
     vector<string> responseEvents = {"y"};
-    // string counterexample = "{x2}{x2,x3}({x1,x2}{x2,x3})";
-    string counterexample = "{x2222}{x2,x4}{event}({aaa}{bbb})";
+    string counterexample = "{x2}{x2,x3}({x1,x2}{x2,x3})";
     CounterexampleGrammar<string::iterator> grammar;
     ParseCounterexample counterexample_parsed;
     auto iter = counterexample.begin();
@@ -210,7 +251,6 @@ int main() {
     } else {
         cout << "Parsing failed." << endl;
     }
-    return 0;
 
     vector<twa_graph_ptr> automaton_list = {};
     cout << "入力 LTL : " << endl;
@@ -268,8 +308,38 @@ int main() {
     print_hoa(projected, automaton_producted);
     projected.close();
 
+    // 反例をグラフにする
+    CEGraph ceg;
+    vector<size_t> vertex_map;
+    size_t num_of_node = counterexample_parsed.events.size() + counterexample_parsed.w_events.size();
+    for (size_t i = 0; i < num_of_node; i++) {
+        vertex_map.push_back(add_vertex(ceg));
+    }
+    for (size_t i = 0; i < vertex_map.size()-1; i++) {
+        EdgeDescriptor e;
+        if (i < counterexample_parsed.events.size()) {
+            e = add_edge(vertex_map[i], vertex_map[i+1], ceg).first;
+            ceg[e].label = counterexample_parsed.events[i];
+        } else {
+            e = add_edge(vertex_map[i], vertex_map[i+1], ceg).first;
+            ceg[e].label = counterexample_parsed.w_events[i-counterexample_parsed.events.size()];
+        }
+    }
+    EdgeDescriptor e;
+    e = add_edge(vertex_map[vertex_map.size()-1], vertex_map[counterexample_parsed.events.size()], ceg).first;
+    ceg[e].label = counterexample_parsed.w_events[counterexample_parsed.w_events.size()-1];
+
+    ofstream cegfile("ceg.dot");
+    write_graphviz(cegfile, ceg, default_writer(), make_label_writer(get(&EdgeProperty::label, ceg)));
+    
+    cout << head(ceg) << endl;
+    cout << head(ceg,0) << endl;
+    cout << head(ceg,1) << endl;
+    cout << head(ceg,2) << endl;
+    cout << head(ceg,3) << endl;
+
     // 有向閉路グラフ(DCG)の作成
-    // Graph dcg;
+    Graph dcg;
     // VertexMap vertex_map;
 
 
