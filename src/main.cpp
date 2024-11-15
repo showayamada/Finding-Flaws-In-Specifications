@@ -57,6 +57,7 @@
 #include <unordered_map>
 #include <boost/utility.hpp>
 #include <boost/foreach.hpp>
+#include <queue>
 
 using namespace std;
 using namespace spot;
@@ -66,30 +67,171 @@ using namespace boost;
 struct EdgeProperty {
     string label;
 };
+struct VertexProperty {
+    string label;
+};
 typedef boost::adjacency_list<vecS, vecS, directedS, no_property, EdgeProperty> CEGraph;
-typedef boost::adjacency_list<boost::vecS, boost::vecS, boost::directedS> Graph;
 typedef boost::graph_traits<CEGraph>::edge_descriptor EdgeDescriptor;
-// struct Node {
-//     twa_graph_state* state;
-//     string counterexample_part;
-//     bool operator==(const Node& other) const {
-//         return state == other.state && counterexample_part == other.counterexample_part;
-//     }
-// };
-// typedef std::unordered_map<Node, Vertex> NodeMap;
-// namespace std {
-//     template <>
-//     struct hash<Node> {
-//         size_t operator()(const Node& node) const {
-//             return hash<state*>()(node.state) ^ hash<string>()(node.counterexample_part);
-//         }
-//     };
-// }
+typedef boost::adjacency_list<boost::vecS, boost::vecS, boost::directedS, VertexProperty> Graph;
+typedef boost::graph_traits<Graph>::vertex_descriptor VertexDescriptor;
 
-// void create_dcg(twa_graph_ptr automaton, const string& counterexample, Graph& g, NodeMap& node_map){
-//     auto init_state = automaton->get_init_state();
-//     Node init_node{init_state, counterexample};
-// }
+struct DCG {
+    Graph graph;
+    map<pair<int, string>, VertexDescriptor> node_map;
+};
+
+struct Node_Map {
+    string name;
+    int ce;
+    int index;
+};
+
+int countNumCe(const vector<Node_Map>& map, int ce) {
+    return count_if(map.begin(), map.end(), [ce](const Node_Map& n) { return n.ce == ce; });
+}
+int getIndex(const vector<Node_Map>& map, string name, int ce) {
+    for (size_t i = 0; i < map.size(); i++) {
+        if (map[i].name == name && map[i].ce == ce) {
+            return map[i].index;
+        }
+    }
+    return -1;
+
+}
+
+
+struct V {
+    string label;
+    int ce;
+};
+struct E {
+    string label;
+    V source;
+    V target;
+};
+
+bool vector_exists(vector<V> vec, V v) {
+    for (size_t i = 0; i < vec.size(); i++) {
+        if (vec[i].label == v.label && vec[i].ce == v.ce) {
+            return true;
+        }
+    }
+    return false;
+}
+
+bool compareVList(vector<V> left, vector<V> right) {
+    if (left.size() != right.size()) {
+        return true;
+    }
+    // for (size_t i = 0; i < left.size(); i++) {
+    //     if (left[i].label != right[i].label) {
+    //         return true;
+    //     }
+    // }
+    return false;
+}
+bool compareEList(vector<E> left, vector<E> right) {
+    if (left.size() != right.size()) {
+        return true;
+    }
+    // for (size_t i = 0; i < left.size(); i++) {
+        // if (left[i].label != right[i].label || left[i].source != right[i].source || left[i].target != right[i].target) {
+        //     return false;
+        // }
+    // }
+    return false;
+}
+
+typedef graph_traits<CEGraph>::edge_iterator edge_iter;
+int tail(CEGraph& g , int head) {
+    edge_iter e, eend;
+    for (tie(e, eend) = edges(g); e != eend; e++) {
+        if (source(*e, g) == head) {
+            //cout << "tail: " << target(*e, g) << endl;
+            return target(*e, g);
+        }
+    }
+    return -1;
+}
+
+void createDCG(twa_graph_ptr& automaton, vector<string> aut_name ,CEGraph ce_graph) {
+    vector<V> V_list;
+    vector<E> E_list;
+    vector<V> V_prime_list;
+    vector<E> E_prime_list;
+    vector<V> V_skip_list;
+    cout << "name:" << endl;
+    for (size_t i = 0; i < aut_name.size(); i++) {
+        cout << aut_name[i] << endl;
+    }
+    V_list.push_back({aut_name[0], 0});
+    int c = 0;
+    while (compareVList(V_list, V_prime_list) || compareEList(E_list, E_prime_list)) {
+        cout << "whileはじまるよ"<< endl;
+        V_prime_list = V_list;
+        E_prime_list = E_list;
+        cout << "V_prime_listのサイズ " << V_prime_list.size() << endl;
+        cout << "E_prime_listのサイズ " << E_prime_list.size() << endl;
+        cout << "V_listの出力 " << endl;
+        for (auto v: V_list) {
+            cout << v.label << "," << v.ce << endl;
+        }
+        cout << "V_skip_listの出力 " << endl;
+        for (auto v: V_skip_list) {
+            cout << v.label << "," << v.ce << endl;
+        }
+        for (auto v: V_prime_list) {
+            cout << "==========" << endl;
+            cout << "v: " << v.label << "," << v.ce << endl;
+            if (vector_exists(V_skip_list, v)) {
+                cout << "skipリストにあるよ" << endl;
+            }
+
+            // skip listに含まれていたら、処理しない
+            if (! vector_exists(V_skip_list, v)) {    
+                for (int i = 0; i < automaton->num_states(); i++) {// vから遷移できるnode
+                    if (true) { // todo head(z) |= b
+                        V new_v = {aut_name[i], tail(ce_graph, v.ce)};
+                        if (! vector_exists(V_list, new_v)) V_list.push_back(new_v);
+                        cout << "追加するedge:" << v.label << ","<< v.ce << " -> " << new_v.label << "," << new_v.ce << endl;   
+                        E_list.push_back({"label", v, new_v});
+                    }
+                }
+            }
+            V_skip_list.push_back(v);   
+        }
+        cout << "v_listのサイズ " << V_list.size() << endl;
+        cout << "e_listのサイズ " << E_list.size() << endl;
+
+        cout << "whileおわるよ" << endl;
+    }
+
+    // V_list, E_listを標準出力
+    cout << "最後のV_listの出力 " << endl;
+    for (auto v: V_list) {
+        cout << v.label << ","<< v.ce << endl;
+    }
+    cout << "最後のE_listの出力 " << endl;
+    for (auto e: E_list) {
+        cout << "edge" << " " << e.source.label << "," << e.source.ce << " -> " << e.target.label << "," << e.target.ce << endl;
+    }
+
+    // DCGの作成
+    Graph dcg;
+    map<V, int> map;
+    int index = 0;
+    for (auto v: V_list) {
+        //map[v] = index;
+        add_vertex(dcg);
+        index++;
+    }
+    for (auto e: E_list) {
+        //add_edge(map[e.source], map[e.target], dcg);
+    }
+    ofstream file("dcg.dot");
+    //write_graphviz(file, dcg);
+
+}
 
 struct ParseCounterexample {
     vector<string> events;
@@ -121,17 +263,17 @@ struct CounterexampleGrammar : spirit::qi::grammar<Iterator, ParseCounterexample
     spirit::qi::rule<Iterator, string(), spirit::qi::space_type> single_expr;
 };
 
-typedef graph_traits<CEGraph>::edge_iterator edge_iter;
 
-string head(CEGraph& g, int tail = -1) {
+struct Head {
+    string label;
+    int index;
+};
+
+Head head(CEGraph& g, int tail) {
     int next;
     edge_iter e, eend;
     for (tie(e, eend) = edges(g); e != eend; e++) {
-        if (tail == -1 && source(*e, g) == 0) {
-            EdgeProperty ceg = g[*e];
-            cout << "label: " << ceg.label << endl;
-            return ceg.label;
-        } else if (source(*e, g) == tail) {
+        if (source(*e, g) == tail) {
             next = target(*e, g);
         }
     }
@@ -139,21 +281,11 @@ string head(CEGraph& g, int tail = -1) {
         if (source(*e, g) == next) {
             EdgeProperty ceg = g[*e];
             cout << "label: " << ceg.label << endl;
-            return ceg.label;
+            Head head = {ceg.label, next};
+            return head;
         }
     }
-    return "error";
-}
-
-int tail(CEGraph& g , int head) {
-    edge_iter e, eend;
-    for (tie(e, eend) = edges(g); e != eend; e++) {
-        if (source(*e, g) == head) {
-            cout << "tail: " << target(*e, g) << endl;
-            return target(*e, g);
-        }
-    }
-    return -1;
+    return {"", -1};
 }
 
 twa_graph_ptr p(twa_graph_ptr left, twa_graph_ptr right, twa_graph_ptr shared, vector<string>& name) {
@@ -311,8 +443,8 @@ int main() {
     // 反例をグラフにする
     CEGraph ceg;
     vector<size_t> vertex_map;
-    size_t num_of_node = counterexample_parsed.events.size() + counterexample_parsed.w_events.size();
-    for (size_t i = 0; i < num_of_node; i++) {
+    size_t num_of_ce_node = counterexample_parsed.events.size() + counterexample_parsed.w_events.size();
+    for (size_t i = 0; i < num_of_ce_node; i++) {
         vertex_map.push_back(add_vertex(ceg));
     }
     for (size_t i = 0; i < vertex_map.size()-1; i++) {
@@ -332,14 +464,43 @@ int main() {
     ofstream cegfile("ceg.dot");
     write_graphviz(cegfile, ceg, default_writer(), make_label_writer(get(&EdgeProperty::label, ceg)));
     
-    cout << head(ceg) << endl;
-    cout << head(ceg,0) << endl;
-    cout << head(ceg,1) << endl;
-    cout << head(ceg,2) << endl;
-    cout << head(ceg,3) << endl;
 
     // 有向閉路グラフ(DCG)の作成
     Graph dcg;
+
+    createDCG(automaton_producted, name, ceg);
+
+    
+
+    // vector<Node_Map> dcg_node_map;
+    // auto v = add_vertex(dcg);
+    // string initial_node = name[0]+to_string(0);
+    // dcg[v].label = initial_node; // 000, 0
+    // Node_Map initial_node_map = {name[0], 0, v};
+    // dcg_node_map.push_back(initial_node_map);
+    // cout << "num_of_ce_node: " << num_of_ce_node << endl;
+    // int tail_num = 0;
+    // for (size_t i = 0; i < num_of_ce_node; i++) { // {x2}{x2,x3}({x1,x2}{x2,x3})
+    //     for (size_t j = 0; j < automaton_producted->num_states(); j++) { // 000, 001, 100, 101
+    //         Head h = head(ceg, tail_num);
+    //         for () {// state j をsourceとするエッジをループ
+    //             tail_num = tail(ceg, h.index);
+    //             if (true) { // todo: head(ceg, i) |= b
+    //                 if (true) { // ノードが作成されてなかったら作る
+    //                     auto v = add_vertex(dcg);
+    //                     dcg[v].label = name[k]+to_string(tail_num);
+    //                     Node_Map node_map = {name[k], tail_num, v};
+    //                     dcg_node_map.push_back(node_map);
+    //                 }
+    //                 add_edge(h.index, getIndex(dcg_node_map, name[k],tail(ceg,i)), dcg);
+    //             }
+    //         }
+    //     }
+    // }
+
+    //ofstream dcgfile("dcg.dot");
+    //write_graphviz(dcgfile, dcg, make_label_writer(get(&VertexProperty::label, dcg)));
+
     // VertexMap vertex_map;
 
 
