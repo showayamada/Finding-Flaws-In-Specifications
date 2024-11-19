@@ -103,6 +103,21 @@ int getIndex(const vector<Node_Map>& map, string name, int ce) {
 struct V {
     string label;
     int ce;
+    bool operator<(const V& right) const {
+        if (ce < right.ce) {
+            return true;
+        }
+        if (ce > right.ce) {
+            return false;
+        }
+        if (label.length() < right.label.length()) {
+            return true;
+        }
+        if (label.length() > right.label.length()) {
+            return false;
+        }
+        return false;
+    }
 };
 struct E {
     string label;
@@ -117,6 +132,15 @@ bool vector_exists(vector<V> vec, V v) {
         }
     }
     return false;
+}
+
+int findVertex(vector<V> vec, V v) {
+    for (size_t i = 0; i < vec.size(); i++) {
+        if (vec[i].label == v.label && vec[i].ce == v.ce) {
+            return i;
+        }
+    }
+    return -1;
 }
 
 bool compareVList(vector<V> left, vector<V> right) {
@@ -165,7 +189,7 @@ void createDCG(twa_graph_ptr& automaton, vector<string> aut_name ,CEGraph ce_gra
         cout << aut_name[i] << endl;
     }
     V_list.push_back({aut_name[0], 0});
-    int c = 0;
+    int index = 0;
     while (compareVList(V_list, V_prime_list) || compareEList(E_list, E_prime_list)) {
         cout << "whileはじまるよ"<< endl;
         V_prime_list = V_list;
@@ -173,13 +197,13 @@ void createDCG(twa_graph_ptr& automaton, vector<string> aut_name ,CEGraph ce_gra
         cout << "V_prime_listのサイズ " << V_prime_list.size() << endl;
         cout << "E_prime_listのサイズ " << E_prime_list.size() << endl;
         cout << "V_listの出力 " << endl;
-        for (auto v: V_list) {
-            cout << v.label << "," << v.ce << endl;
-        }
-        cout << "V_skip_listの出力 " << endl;
-        for (auto v: V_skip_list) {
-            cout << v.label << "," << v.ce << endl;
-        }
+        // for (auto v: V_list) {
+        //     cout << v.label << "," << v.ce << endl;
+        // }
+        // cout << "V_skip_listの出力 " << endl;
+        // for (auto v: V_skip_list) {
+        //     cout << v.label << "," << v.ce << endl;
+        // }
         for (auto v: V_prime_list) {
             cout << "==========" << endl;
             cout << "v: " << v.label << "," << v.ce << endl;
@@ -192,8 +216,11 @@ void createDCG(twa_graph_ptr& automaton, vector<string> aut_name ,CEGraph ce_gra
                 for (int i = 0; i < automaton->num_states(); i++) {// vから遷移できるnode
                     if (true) { // todo head(z) |= b
                         V new_v = {aut_name[i], tail(ce_graph, v.ce)};
-                        if (! vector_exists(V_list, new_v)) V_list.push_back(new_v);
-                        cout << "追加するedge:" << v.label << ","<< v.ce << " -> " << new_v.label << "," << new_v.ce << endl;   
+                        V target_v = new_v;
+                        if (! vector_exists(V_list, new_v)) {
+                            V_list.push_back(new_v);
+                        }
+                        cout << "追加するedge:" << v.label << ","<< v.ce << " -> " << target_v.label << "," << target_v.ce << endl;   
                         E_list.push_back({"label", v, new_v});
                     }
                 }
@@ -219,17 +246,20 @@ void createDCG(twa_graph_ptr& automaton, vector<string> aut_name ,CEGraph ce_gra
     // DCGの作成
     Graph dcg;
     map<V, int> map;
-    int index = 0;
     for (auto v: V_list) {
-        //map[v] = index;
         add_vertex(dcg);
-        index++;
     }
+    //map全ての出力
+    for (auto m: map) {
+        cout << "map: " << m.first.label << "," << m.first.ce << " -> " << m.second << endl;
+    }
+    cout << "V_listのサイズ " << V_list.size() << endl;
     for (auto e: E_list) {
-        //add_edge(map[e.source], map[e.target], dcg);
+        cout << "edge:" << findVertex(V_list, e.source)<< " -> " << findVertex(V_list, e.target) << endl;
+        add_edge(findVertex(V_list, e.source), findVertex(V_list, e.target), dcg);
     }
     ofstream file("dcg.dot");
-    //write_graphviz(file, dcg);
+    write_graphviz(file, dcg);
 
 }
 
