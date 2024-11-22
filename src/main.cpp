@@ -63,6 +63,37 @@ using namespace std;
 using namespace spot;
 using namespace boost;
 
+string replaceCommasWithAmpersands(const string& s) {
+    string result = s;
+    replace(result.begin(), result.end(), ',', '&');
+    return result;
+}
+
+vector<string> extractVariables(const string& s) {
+    vector<string> result;
+    string::size_type start = 0;
+    string::size_type end = 0;
+    while (end != string::npos) {
+        end = s.find_first_of("&", start);
+        result.push_back(s.substr(start, end - start));
+        start = end + 1;
+    }
+    return result;
+}
+
+template <typename K, typename V>
+map<K, V> filleterKeys(const map<K, V>& input, const vector<K>& keysToExclude) {
+    map<K, V> result;
+    // 除外キーをセットで保持（高速な検索のため）
+    set<K> excludeSet(keysToExclude.begin(), keysToExclude.end());
+    for (const auto& pair : input) {
+        if (excludeSet.find(pair.first) == excludeSet.end()) {
+            result.insert(pair);
+        }
+    }
+    return result;
+}
+
 // edge property
 struct EdgeProperty {
     string label;
@@ -212,23 +243,52 @@ int getIndexByName(vector<string> name, string target) {
     return -1;
 }
 
-void createDCG(twa_graph_ptr& automaton, vector<string> aut_name ,CEGraph ce_graph) {
+void createDCG(twa_graph_ptr& automaton, vector<string> aut_name ,CEGraph ce_graph, vector<string> responseEvents) {
     vector<V> V_list;
     vector<E> E_list;
     vector<V> V_prime_list;
     vector<E> E_prime_list;
     vector<V> V_skip_list;
+    auto dict = automaton->get_dict();
+    cout << "dict: " << endl;
+    dict->dump(cout); 
+
     V_list.push_back({aut_name[0], 0});
+    
     while (compareVList(V_list, V_prime_list) || compareEList(E_list, E_prime_list)) {
         V_prime_list = V_list;
         E_prime_list = E_list;
         for (auto v: V_prime_list) {
+            Head h = head(ce_graph, v.ce);
+            string head_string = replaceCommasWithAmpersands(h.label);
+            vector<bdd> vars;
+            vector<formula> head_formulas;
+            for (const auto& var: extractVariables(head_string)) {
+                cout << "var: " << var << endl;
+                formula f = parse_infix_psl(var).f;
+                int bdd_index = dict->var_map[f];
+                bdd var_b = bdd_ithvar(bdd_index);
+                vars.push_back(var_b);
+                head_formulas.push_back(f);
+                cout << "var_b: " << var_b << endl;
+            }
+            bdd head_bdd = bddtrue;
+            for (const auto& var: vars) {
+                head_bdd &= var;
+            }
+            map<formula, int> head_fmap = filleterKeys(dict->var_map, head_formulas);
+            for (const auto& pair: head_fmap) {
+                // 応答イベントの場合はスキップする
+                if (find(responseEvents.begin(), responseEvents.end(), str_psl(pair.first)) != responseEvents.end()) {
+                    continue;
+                }
+                head_bdd &= bdd_nithvar(pair.second);
+            }
+            cout << "head_bdd: " << bdd_format_formula(dict,head_bdd) << endl;
+
             // skip listに含まれていたら、処理しない
             if (! vector_exists(V_skip_list, v)) {    
                 for (int i = 0; i < automaton->num_states(); i++) {// vから遷移できるnode
-
-                    Head h = head(ce_graph, v.ce);   
-                    cout << "head: " << h.label << endl;  
 
                     V new_v = {aut_name[i], tail(ce_graph, v.ce)};
                     V target_v = new_v;
@@ -238,12 +298,15 @@ void createDCG(twa_graph_ptr& automaton, vector<string> aut_name ,CEGraph ce_gra
                     // b = get_edgeBDD(0, 1, automaton) -> 0から1へのエッジを取得
                     int v_index = getIndexByName(aut_name, v.label);
                     bdd b = getEdgeBDD(v_index, i, automaton);
-                    cout << "b: " << b << endl;
+                    cout << "b: " << bdd_format_formula(dict,b) << endl;
+                    bdd restricted = bdd_restrict(b, head_bdd);
+                    cout << "satone(edgeを追加するかどうか):" << bdd_satone(restricted) << endl; 
+                    //cout << "restricted: " << restricted << endl;
 
-                    if (true) { // todo head(z) |= b
-                        if (! vector_exists(V_list, new_v)) {
-                            V_list.push_back(new_v);
-                        }
+                    if (! vector_exists(V_list, new_v)) {
+                        V_list.push_back(new_v);
+                    }
+                    if (bddtrue == bdd_satone(restricted)) { // todo head(z) |= b
                         cout << "追加するedge:" << v.label << ","<< v.ce << " -> " << target_v.label << "," << target_v.ce << endl;   
                         E_list.push_back({"label", v, new_v});
                     }
@@ -254,14 +317,14 @@ void createDCG(twa_graph_ptr& automaton, vector<string> aut_name ,CEGraph ce_gra
     }
 
     // V_list, E_listを標準出力
-    cout << "最後のV_listの出力 " << endl;
-    for (auto v: V_list) {
-        cout << v.label << ","<< v.ce << endl;
-    }
-    cout << "最後のE_listの出力 " << endl;
-    for (auto e: E_list) {
-        cout << "edge" << " " << e.source.label << "," << e.source.ce << " -> " << e.target.label << "," << e.target.ce << endl;
-    }
+    // cout << "最後のV_listの出力 " << endl;
+    // for (auto v: V_list) {
+    //     cout << v.label << ","<< v.ce << endl;
+    // }
+    // cout << "最後のE_listの出力 " << endl;
+    // for (auto e: E_list) {
+    //     cout << "edge" << " " << e.source.label << "," << e.source.ce << " -> " << e.target.label << "," << e.target.ce << endl;
+    // }
 
     // DCGの作成
     Graph dcg;
@@ -269,18 +332,13 @@ void createDCG(twa_graph_ptr& automaton, vector<string> aut_name ,CEGraph ce_gra
     for (auto v: V_list) {
         add_vertex(dcg);
     }
-    //map全ての出力
-    for (auto m: map) {
-        cout << "map: " << m.first.label << "," << m.first.ce << " -> " << m.second << endl;
-    }
-    cout << "V_listのサイズ " << V_list.size() << endl;
+
     for (auto e: E_list) {
         cout << "edge:" << findVertex(V_list, e.source)<< " -> " << findVertex(V_list, e.target) << endl;
         add_edge(findVertex(V_list, e.source), findVertex(V_list, e.target), dcg);
     }
     ofstream file("dcg.dot");
     write_graphviz(file, dcg);
-
 }
 
 struct ParseCounterexample {
@@ -373,6 +431,32 @@ twa_graph_ptr synchronous_product(vector<twa_graph_ptr> automatons, twa_graph_pt
     return producted;
 }
 
+CEGraph createCounterExampleGraph(CEGraph& graph, ParseCounterexample& counterexample_parsed) {
+    vector<size_t> vertex_map;
+    size_t num_of_ce_node = counterexample_parsed.events.size() + counterexample_parsed.w_events.size();
+    for (size_t i = 0; i < num_of_ce_node; i++) {
+        vertex_map.push_back(add_vertex(graph));
+    }
+    for (size_t i = 0; i < vertex_map.size()-1; i++) {
+        EdgeDescriptor e;
+        if (i < counterexample_parsed.events.size()) {
+            e = add_edge(vertex_map[i], vertex_map[i+1], graph).first;
+            graph[e].label = counterexample_parsed.events[i];
+        } else {
+            e = add_edge(vertex_map[i], vertex_map[i+1], graph).first;
+            graph[e].label = counterexample_parsed.w_events[i-counterexample_parsed.events.size()];
+        }
+    }
+    EdgeDescriptor e;
+    e = add_edge(vertex_map[vertex_map.size()-1], vertex_map[counterexample_parsed.events.size()], graph).first;
+    graph[e].label = counterexample_parsed.w_events[counterexample_parsed.w_events.size()-1];
+
+    ofstream cegfile("ceg.dot");
+    write_graphviz(cegfile, graph, default_writer(), make_label_writer(get(&EdgeProperty::label, graph)));
+
+    return graph;
+}
+
 int main() {
     // LTL式の入力
     vector<string> ltl_formula_str_list = {
@@ -460,42 +544,22 @@ int main() {
         }
     }    
     // デバッグ用
-    cout << "====================DEBUG====================" << endl;
-    print_hoa(cout, automaton_producted);
+    // cout << "====================DEBUG====================" << endl;
+    // print_hoa(cout, automaton_producted);
     ofstream projected("projected.hoa");
     print_hoa(projected, automaton_producted);
     projected.close();
 
     // 反例をグラフにする
     CEGraph ceg;
-    vector<size_t> vertex_map;
-    size_t num_of_ce_node = counterexample_parsed.events.size() + counterexample_parsed.w_events.size();
-    for (size_t i = 0; i < num_of_ce_node; i++) {
-        vertex_map.push_back(add_vertex(ceg));
-    }
-    for (size_t i = 0; i < vertex_map.size()-1; i++) {
-        EdgeDescriptor e;
-        if (i < counterexample_parsed.events.size()) {
-            e = add_edge(vertex_map[i], vertex_map[i+1], ceg).first;
-            ceg[e].label = counterexample_parsed.events[i];
-        } else {
-            e = add_edge(vertex_map[i], vertex_map[i+1], ceg).first;
-            ceg[e].label = counterexample_parsed.w_events[i-counterexample_parsed.events.size()];
-        }
-    }
-    EdgeDescriptor e;
-    e = add_edge(vertex_map[vertex_map.size()-1], vertex_map[counterexample_parsed.events.size()], ceg).first;
-    ceg[e].label = counterexample_parsed.w_events[counterexample_parsed.w_events.size()-1];
-
-    ofstream cegfile("ceg.dot");
-    write_graphviz(cegfile, ceg, default_writer(), make_label_writer(get(&EdgeProperty::label, ceg)));
-    
+    ceg = createCounterExampleGraph(ceg, counterexample_parsed);  
 
     // 有向閉路グラフ(DCG)の作成
     Graph dcg;
+    createDCG(automaton_producted, name, ceg, responseEvents);
+    cout << "DCGの作成が完了しました" << endl;
 
-    createDCG(automaton_producted, name, ceg);
-
+    return 0;
     
 
     // vector<Node_Map> dcg_node_map;
@@ -553,8 +617,8 @@ int main() {
 
     // }
 
-    ofstream dcg_ofs("projected.dot");
-    print_dot(dcg_ofs, automaton_producted);
+    //ofstream dcg_ofs("projected.dot");
+    //print_dot(dcg_ofs, automaton_producted);
 
     return 0;
 }
