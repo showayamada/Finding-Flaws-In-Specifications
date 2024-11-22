@@ -1,1 +1,1 @@
-set(LIBRARY_PATH "/path/to/your/library")
+set(LIBRARY_PATH "/path/to/thisProject/include")

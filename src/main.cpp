@@ -178,45 +178,69 @@ int tail(CEGraph& g , int head) {
     return -1;
 }
 
+struct Head {
+    string label;
+};
+
+Head head(CEGraph& g, int pointer) {
+    edge_iter e, eend;
+    for (tie(e, eend) = edges(g); e != eend; e++) {
+        if (source(*e, g) == pointer) {
+            EdgeProperty ceg = g[*e];
+            Head head = {ceg.label};
+            return head;
+        }
+    }
+
+    return {"error"};
+}
+
+bdd getEdgeBDD(int source, int target, twa_graph_ptr automaton) {
+    
+    for (auto& edge: automaton->edges()) {
+        if (edge.src == source && edge.dst == target) return edge.cond;
+    }
+    return bddfalse;
+}
+
+int getIndexByName(vector<string> name, string target) {
+    for (size_t i = 0; i < name.size(); i++) {
+        if (name[i] == target) {
+            return i;
+        }
+    }
+    return -1;
+}
+
 void createDCG(twa_graph_ptr& automaton, vector<string> aut_name ,CEGraph ce_graph) {
     vector<V> V_list;
     vector<E> E_list;
     vector<V> V_prime_list;
     vector<E> E_prime_list;
     vector<V> V_skip_list;
-    cout << "name:" << endl;
-    for (size_t i = 0; i < aut_name.size(); i++) {
-        cout << aut_name[i] << endl;
-    }
     V_list.push_back({aut_name[0], 0});
-    int index = 0;
     while (compareVList(V_list, V_prime_list) || compareEList(E_list, E_prime_list)) {
-        cout << "whileはじまるよ"<< endl;
         V_prime_list = V_list;
         E_prime_list = E_list;
-        cout << "V_prime_listのサイズ " << V_prime_list.size() << endl;
-        cout << "E_prime_listのサイズ " << E_prime_list.size() << endl;
-        cout << "V_listの出力 " << endl;
-        // for (auto v: V_list) {
-        //     cout << v.label << "," << v.ce << endl;
-        // }
-        // cout << "V_skip_listの出力 " << endl;
-        // for (auto v: V_skip_list) {
-        //     cout << v.label << "," << v.ce << endl;
-        // }
         for (auto v: V_prime_list) {
-            cout << "==========" << endl;
-            cout << "v: " << v.label << "," << v.ce << endl;
-            if (vector_exists(V_skip_list, v)) {
-                cout << "skipリストにあるよ" << endl;
-            }
-
             // skip listに含まれていたら、処理しない
             if (! vector_exists(V_skip_list, v)) {    
                 for (int i = 0; i < automaton->num_states(); i++) {// vから遷移できるnode
+
+                    Head h = head(ce_graph, v.ce);   
+                    cout << "head: " << h.label << endl;  
+
+                    V new_v = {aut_name[i], tail(ce_graph, v.ce)};
+                    V target_v = new_v;
+                    
+                    // オートマトンvからのi番目の状態に遷移できるか
+                    // オートマトンのV(000,,,)からi(0123)へのエッジを取得
+                    // b = get_edgeBDD(0, 1, automaton) -> 0から1へのエッジを取得
+                    int v_index = getIndexByName(aut_name, v.label);
+                    bdd b = getEdgeBDD(v_index, i, automaton);
+                    cout << "b: " << b << endl;
+
                     if (true) { // todo head(z) |= b
-                        V new_v = {aut_name[i], tail(ce_graph, v.ce)};
-                        V target_v = new_v;
                         if (! vector_exists(V_list, new_v)) {
                             V_list.push_back(new_v);
                         }
@@ -227,10 +251,6 @@ void createDCG(twa_graph_ptr& automaton, vector<string> aut_name ,CEGraph ce_gra
             }
             V_skip_list.push_back(v);   
         }
-        cout << "v_listのサイズ " << V_list.size() << endl;
-        cout << "e_listのサイズ " << E_list.size() << endl;
-
-        cout << "whileおわるよ" << endl;
     }
 
     // V_list, E_listを標準出力
@@ -293,30 +313,6 @@ struct CounterexampleGrammar : spirit::qi::grammar<Iterator, ParseCounterexample
     spirit::qi::rule<Iterator, string(), spirit::qi::space_type> single_expr;
 };
 
-
-struct Head {
-    string label;
-    int index;
-};
-
-Head head(CEGraph& g, int tail) {
-    int next;
-    edge_iter e, eend;
-    for (tie(e, eend) = edges(g); e != eend; e++) {
-        if (source(*e, g) == tail) {
-            next = target(*e, g);
-        }
-    }
-    for (tie(e, eend) = edges(g); e != eend; e++) {
-        if (source(*e, g) == next) {
-            EdgeProperty ceg = g[*e];
-            cout << "label: " << ceg.label << endl;
-            Head head = {ceg.label, next};
-            return head;
-        }
-    }
-    return {"", -1};
-}
 
 twa_graph_ptr p(twa_graph_ptr left, twa_graph_ptr right, twa_graph_ptr shared, vector<string>& name) {
     twa_graph_ptr producted = make_twa_graph(shared->get_dict());
