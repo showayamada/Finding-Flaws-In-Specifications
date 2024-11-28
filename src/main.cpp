@@ -503,11 +503,22 @@ int main() {
 
         translator translator(dict);
         twa_graph_ptr automaton = translator.run(formula);
+        // オートマトンの各状態からある状態にtrueで遷移できるようにし、その状態からその状態にtrueの遷移を追加する
+        unsigned newState = automaton->new_state();
+        for (size_t i = 0; i < automaton->num_states(); i++) {
+            automaton->new_edge(i, newState, bddtrue);
+        }
+
         automaton_list.push_back(automaton);
         // hoa形式をファイルに出力する
-        ofstream ofs(ltl_formula_str_list[i] + "_automaton.hoa");
-        print_hoa(ofs, automaton);
-        ofs.close();
+        //ofstream ofs(ltl_formula_str_list[i] + "_automaton.hoa");
+        // print_hoa(ofs, automaton);
+        ofstream f("automaton" + to_string(i) + ".dot");
+        print_dot(f, automaton);
+        //ofs.close();
+        f.close();
+
+
     }
     cout << "応答イベント : " << endl;
     for (auto res: responseEvents) {
@@ -520,8 +531,8 @@ int main() {
     vector<string> name;
     automaton_producted = synchronous_product(automaton_list, shared, name);
     cout << "同期積合成が完了しました" << endl;
-    ofstream producted_ofs("producted.hoa");
-    print_hoa(producted_ofs, automaton_producted);
+    ofstream producted_ofs("producted.dot");
+    print_dot(producted_ofs, automaton_producted);
     producted_ofs.close();
 
     // デバッグ用
@@ -546,8 +557,8 @@ int main() {
     // デバッグ用
     // cout << "====================DEBUG====================" << endl;
     // print_hoa(cout, automaton_producted);
-    ofstream projected("projected.hoa");
-    print_hoa(projected, automaton_producted);
+    ofstream projected("projected.dot");
+    print_dot(projected, automaton_producted);
     projected.close();
 
     // 反例をグラフにする
