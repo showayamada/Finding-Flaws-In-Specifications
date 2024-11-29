@@ -1,4 +1,7 @@
-build/
+build/*
 .env
 config.cmake
-include/
+include/bin/*
+include/lib/*
+include/include/*
+include/share/*
