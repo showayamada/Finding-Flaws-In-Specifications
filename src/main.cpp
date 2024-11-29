@@ -250,7 +250,7 @@ void createDCG(twa_graph_ptr& automaton, vector<string> aut_name ,CEGraph ce_gra
     vector<E> E_prime_list;
     vector<V> V_skip_list;
     auto dict = automaton->get_dict();
-    cout << "dict: " << endl;
+    //cout << "dict: " << endl;
     dict->dump(cout); 
 
     V_list.push_back({aut_name[0], 0});
@@ -264,13 +264,13 @@ void createDCG(twa_graph_ptr& automaton, vector<string> aut_name ,CEGraph ce_gra
             vector<bdd> vars;
             vector<formula> head_formulas;
             for (const auto& var: extractVariables(head_string)) {
-                cout << "var: " << var << endl;
+                //cout << "var: " << var << endl;
                 formula f = parse_infix_psl(var).f;
                 int bdd_index = dict->var_map[f];
                 bdd var_b = bdd_ithvar(bdd_index);
                 vars.push_back(var_b);
                 head_formulas.push_back(f);
-                cout << "var_b: " << var_b << endl;
+                //cout << "var_b: " << var_b << endl;
             }
             bdd head_bdd = bddtrue;
             for (const auto& var: vars) {
@@ -284,7 +284,7 @@ void createDCG(twa_graph_ptr& automaton, vector<string> aut_name ,CEGraph ce_gra
                 }
                 head_bdd &= bdd_nithvar(pair.second);
             }
-            cout << "head_bdd: " << bdd_format_formula(dict,head_bdd) << endl;
+            //cout << "head_bdd: " << bdd_format_formula(dict,head_bdd) << endl;
 
             // skip listに含まれていたら、処理しない
             if (! vector_exists(V_skip_list, v)) {    
@@ -298,16 +298,16 @@ void createDCG(twa_graph_ptr& automaton, vector<string> aut_name ,CEGraph ce_gra
                     // b = get_edgeBDD(0, 1, automaton) -> 0から1へのエッジを取得
                     int v_index = getIndexByName(aut_name, v.label);
                     bdd b = getEdgeBDD(v_index, i, automaton);
-                    cout << "b: " << bdd_format_formula(dict,b) << endl;
+                    //cout << "b: " << bdd_format_formula(dict,b) << endl;
                     bdd restricted = bdd_restrict(b, head_bdd);
-                    cout << "satone(edgeを追加するかどうか):" << bdd_satone(restricted) << endl; 
+                    //cout << "satone(edgeを追加するかどうか):" << bdd_satone(restricted) << endl; 
                     //cout << "restricted: " << restricted << endl;
 
                     if (! vector_exists(V_list, new_v)) {
                         V_list.push_back(new_v);
                     }
                     if (bddtrue == bdd_satone(restricted)) { // todo head(z) |= b
-                        cout << "追加するedge:" << v.label << ","<< v.ce << " -> " << target_v.label << "," << target_v.ce << endl;   
+                        //cout << "追加するedge:" << v.label << ","<< v.ce << " -> " << target_v.label << "," << target_v.ce << endl;   
                         E_list.push_back({"label", v, new_v});
                     }
                 }
@@ -334,7 +334,7 @@ void createDCG(twa_graph_ptr& automaton, vector<string> aut_name ,CEGraph ce_gra
     }
 
     for (auto e: E_list) {
-        cout << "edge:" << findVertex(V_list, e.source)<< " -> " << findVertex(V_list, e.target) << endl;
+        // cout << "edge:" << findVertex(V_list, e.source)<< " -> " << findVertex(V_list, e.target) << endl;
         add_edge(findVertex(V_list, e.source), findVertex(V_list, e.target), dcg);
     }
     ofstream file("dcg.dot");
@@ -388,7 +388,7 @@ twa_graph_ptr p(twa_graph_ptr left, twa_graph_ptr right, twa_graph_ptr shared, v
     } else {
         vector<string> tmp;
         for (size_t i = 0; i < left->num_states(); i++) {
-            for (size_t j = 0; j < left->num_states(); j++) {
+            for (size_t j = 0; j < right->num_states(); j++) {
                 unsigned new_state = producted->new_state();
                 state_names.push_back(to_string(i) + to_string(j));
                 tmp.push_back(name[i]+to_string(j));
@@ -398,11 +398,11 @@ twa_graph_ptr p(twa_graph_ptr left, twa_graph_ptr right, twa_graph_ptr shared, v
     }
 
     for (size_t i = 0; i < state_names.size(); i++) {
-        int l_state_src = int(state_names[i][0]-'0');
-        int r_state_src = int(state_names[i][1]-'0');
+        int l_state_src = stoi(to_string(state_names[i][0]));
+        int r_state_src = stoi(to_string(state_names[i][1]));
         for (size_t j = 0; j < state_names.size(); j++) {
-            int l_state_dst = int(state_names[j][0]-'0');
-            int r_state_dst = int(state_names[j][1]-'0');
+            int l_state_dst = stoi(to_string(state_names[j][0]));
+            int r_state_dst = stoi(to_string(state_names[j][1]));
             for (auto l_edge: left->out(l_state_src)) {
                 for (auto r_edge: right->out(r_state_src)) {
                     if (l_edge.dst == l_state_dst && r_edge.dst == r_state_dst) {
@@ -427,6 +427,8 @@ twa_graph_ptr synchronous_product(vector<twa_graph_ptr> automatons, twa_graph_pt
             continue;
         }
         producted = p(producted, automatons[i], shared, name);
+        ofstream totyu("途中"+to_string(i)+".dot");
+        print_dot(totyu, producted);
     }
     return producted;
 }
