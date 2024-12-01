@@ -58,6 +58,9 @@
 #include <boost/utility.hpp>
 #include <boost/foreach.hpp>
 #include <queue>
+#include <boost/config.hpp>
+#include <boost/graph/strong_components.hpp>
+#include <boost/graph/graph_utility.hpp>
 
 using namespace std;
 using namespace spot;
@@ -243,7 +246,7 @@ int getIndexByName(vector<string> name, string target) {
     return -1;
 }
 
-void createDCG(twa_graph_ptr& automaton, vector<string> aut_name ,CEGraph ce_graph, vector<string> responseEvents) {
+Graph createDCG(twa_graph_ptr& automaton, vector<string> aut_name, vector<string>& dcg_name, CEGraph ce_graph, vector<string> responseEvents) {
     vector<V> V_list;
     vector<E> E_list;
     vector<V> V_prime_list;
@@ -254,7 +257,7 @@ void createDCG(twa_graph_ptr& automaton, vector<string> aut_name ,CEGraph ce_gra
     dict->dump(cout); 
 
     V_list.push_back({aut_name[0], 0});
-    
+    dcg_name.push_back(aut_name[0] + "0");    
     while (compareVList(V_list, V_prime_list) || compareEList(E_list, E_prime_list)) {
         V_prime_list = V_list;
         E_prime_list = E_list;
@@ -304,6 +307,7 @@ void createDCG(twa_graph_ptr& automaton, vector<string> aut_name ,CEGraph ce_gra
                     //cout << "restricted: " << restricted << endl;
 
                     if (! vector_exists(V_list, new_v)) {
+                        dcg_name.push_back(new_v.label + to_string(new_v.ce));
                         V_list.push_back(new_v);
                     }
                     if (bddtrue == bdd_satone(restricted)) { // todo head(z) |= b
@@ -339,6 +343,8 @@ void createDCG(twa_graph_ptr& automaton, vector<string> aut_name ,CEGraph ce_gra
     }
     ofstream file("dcg.dot");
     write_graphviz(file, dcg);
+
+    return dcg;
 }
 
 struct ParseCounterexample {
@@ -459,6 +465,79 @@ CEGraph createCounterExampleGraph(CEGraph& graph, ParseCounterexample& counterex
     return graph;
 }
 
+struct Mscc {
+    map<int, vector<int>> component;
+    int num_scc;
+};
+
+Mscc searchSCC (Graph& dcg) {
+
+    dynamic_properties dp;
+    typedef graph_traits<Graph>::vertex_descriptor Dcg_vertex;
+    vector<int> component(num_vertices(dcg)), discover_time(num_vertices(dcg));
+    vector<default_color_type> color(num_vertices(dcg));
+    vector<Dcg_vertex> root(num_vertices(dcg));
+    auto params = (
+        root_map(make_iterator_property_map(root.begin(), get(vertex_index, dcg)))
+        .color_map(make_iterator_property_map(color.begin(), get(vertex_index, dcg)))
+        .discover_time_map(make_iterator_property_map(discover_time.begin(), get(vertex_index, dcg)))
+    );
+    int num_scc = strong_components(dcg,
+        make_iterator_property_map(component.begin(), get(vertex_index, dcg)),
+        params
+    );
+
+    // cout << "num_scc: " << num_scc << endl;
+    // for (int i = 0; i != component.size(); i++) {
+    //     cout << "vertex: " << i << " is in component " << component[i] << endl;
+    // }
+
+    map<int, vector<int>> mscc_map;
+    for (size_t i = 0; i < component.size(); i++) {
+        if (is_reachable(0, i, dcg, color.data())) {
+            mscc_map[component[i]].push_back(i);
+        }
+    }
+
+    return {mscc_map, num_scc};
+}
+
+map<int, string> find_non_accepting_indices(Mscc mscc, vector<string> dcg_name) {
+    map<int, string> non_accepting_indices;
+    string tmp_index_name = "";
+    for(int i = 1; i < dcg_name[0].length(); i++) {
+        tmp_index_name += to_string(i);
+    }
+    for (size_t i = 0; i < mscc.num_scc; i++) {
+        non_accepting_indices[i] = tmp_index_name;
+    }
+
+    for (auto pair: mscc.component) {
+        cout << "component: " << pair.first << endl;
+        if (pair.second.size() == 1) continue;
+        for (auto v: pair.second) {
+            cout << v << endl;
+            // dcg_name[v]の文字列の何番目に0があるか
+            for (size_t j = 0; j < dcg_name[v].length(); j++) {
+                if (dcg_name[v][j] == '0') {
+                    // 既に消えている場合はスキップ 0があった番目を消す
+                    if (non_accepting_indices[pair.first].find(to_string(j+1)) != string::npos) {
+                        non_accepting_indices[pair.first].erase(non_accepting_indices[pair.first].find(to_string(j+1)), 1);
+                    }
+                }
+            }
+        }
+    }
+
+    // non_accepting_indicesの出力
+    cout << "non_accepting_indices: " << endl;
+    for (auto pair: non_accepting_indices) {
+        cout << pair.second << endl;
+    }
+
+    return non_accepting_indices;
+}
+
 int main() {
     // LTL式の入力
     vector<string> ltl_formula_str_list = {
@@ -530,8 +609,8 @@ int main() {
     // オートマトンの同期積合成
     cout << "同期積合成を開始します" << endl;
     twa_graph_ptr automaton_producted = make_twa_graph(dict);
-    vector<string> name;
-    automaton_producted = synchronous_product(automaton_list, shared, name);
+    vector<string> aut_name;
+    automaton_producted = synchronous_product(automaton_list, shared, aut_name);
     cout << "同期積合成が完了しました" << endl;
     ofstream producted_ofs("producted.dot");
     print_dot(producted_ofs, automaton_producted);
@@ -568,70 +647,26 @@ int main() {
     ceg = createCounterExampleGraph(ceg, counterexample_parsed);  
 
     // 有向閉路グラフ(DCG)の作成
-    Graph dcg;
-    createDCG(automaton_producted, name, ceg, responseEvents);
+    vector<string> dcg_name;
+    Graph dcg = createDCG(automaton_producted, aut_name, dcg_name, ceg, responseEvents);
     cout << "DCGの作成が完了しました" << endl;
 
-    return 0;
+    cout << "dcg_name: " << endl;
+    for (size_t i = 0; i < dcg_name.size(); i++) {
+        cout << i << " : " << dcg_name[i] << endl;
+    }
+
+    // 極大強連結成分の探索
+    cout << "極大強連結成分の探索を開始します" << endl;
+    Mscc mscc = searchSCC(dcg);
+
+    // 受理条件を満たしていないインデックスの導出
+    find_non_accepting_indices(mscc, dcg_name);
+
+    // 強充足不能コアの導出
+
+
     
-
-    // vector<Node_Map> dcg_node_map;
-    // auto v = add_vertex(dcg);
-    // string initial_node = name[0]+to_string(0);
-    // dcg[v].label = initial_node; // 000, 0
-    // Node_Map initial_node_map = {name[0], 0, v};
-    // dcg_node_map.push_back(initial_node_map);
-    // cout << "num_of_ce_node: " << num_of_ce_node << endl;
-    // int tail_num = 0;
-    // for (size_t i = 0; i < num_of_ce_node; i++) { // {x2}{x2,x3}({x1,x2}{x2,x3})
-    //     for (size_t j = 0; j < automaton_producted->num_states(); j++) { // 000, 001, 100, 101
-    //         Head h = head(ceg, tail_num);
-    //         for () {// state j をsourceとするエッジをループ
-    //             tail_num = tail(ceg, h.index);
-    //             if (true) { // todo: head(ceg, i) |= b
-    //                 if (true) { // ノードが作成されてなかったら作る
-    //                     auto v = add_vertex(dcg);
-    //                     dcg[v].label = name[k]+to_string(tail_num);
-    //                     Node_Map node_map = {name[k], tail_num, v};
-    //                     dcg_node_map.push_back(node_map);
-    //                 }
-    //                 add_edge(h.index, getIndex(dcg_node_map, name[k],tail(ceg,i)), dcg);
-    //             }
-    //         }
-    //     }
-    // }
-
-    //ofstream dcgfile("dcg.dot");
-    //write_graphviz(dcgfile, dcg, make_label_writer(get(&VertexProperty::label, dcg)));
-
-    // VertexMap vertex_map;
-
-
-
-    // map<int, Graph::vertex_descriptor> desc;
-    // auto V = automaton_producted->states();
-    // vector<spot::internal::distate_storage<unsigned int, spot::internal::boxed_label<spot::twa_graph_state>>> V_prime;
-    // twa_graph::edge_storage_t E;
-    // twa_graph::edge_storage_t E_prime; 
-    // while(V != V_prime || E != E_prime) {
-    //     V_prime = V;
-    //     E_prime = E;
-    //     for (size_t i = 0; i < automaton_producted->states().size(); i++) {
-    //         for (auto& t: automaton_producted->out(i)) {
-    //             string src = to_string(i);
-    //             string dst= to_string(t.dst);
-    //             if (head(i)|= b) {
-    //                 // 新しいノードとエッジを追加
-    //                 desc[i] = add_vertex(dcg); 
-    //                 add_edge()
-    //             }
-    //         }
-    //     }
-
-    // }
-
-    //ofstream dcg_ofs("projected.dot");
-    //print_dot(dcg_ofs, automaton_producted);
 
     return 0;
 }
