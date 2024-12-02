@@ -538,6 +538,50 @@ map<int, string> find_non_accepting_indices(Mscc mscc, vector<string> dcg_name) 
     return non_accepting_indices;
 }
 
+vector<vector<int>> get_strongly_unsatisfiable_core(map<int, string> non_accepting_indices, int n) {    
+    vector<vector<int>> core;
+    vector<int> all;
+    for (int i = 1; i <= n; i++) {
+        all.push_back(i);
+    }
+    vector<vector<int>> subsets;
+    for (int i = 0; i < (1 << n); i++) {
+        vector<int> subset;
+        for (int j = 0; j < n; j++) {
+            if (i & (1 << j)) {
+                subset.push_back(all[j]);
+            }
+        }
+        subsets.push_back(subset);
+    }
+
+    for (auto subset: subsets) {
+        bool is_included = true;
+        for (auto pair: non_accepting_indices) {
+            string non_accepting = pair.second;
+            bool flg = false;
+            for (auto s: subset) {
+                if (non_accepting.find(to_string(s)) != string::npos) {
+                    flg = true;
+                }
+            }
+            is_included = flg;
+            if (!is_included) {
+                break;
+            }
+        }
+        vector<int> core_subset;
+        if (is_included) {
+            for (auto s: subset) {
+                core_subset.push_back(s);
+            }
+            core.push_back(core_subset);
+        }
+    }
+
+    return core;    
+}
+
 int main() {
     // LTL式の入力
     vector<string> ltl_formula_str_list = {
@@ -618,7 +662,7 @@ int main() {
 
     // デバッグ用
     // cout << "====================DEBUG====================" << endl;
-    // cout<< "なまえ" << endl;
+    // cout<< "autmaton_name" << endl;
     // for (size_t i = 0; i < name.size(); i++) {
     //     cout << i << " : " << name[i] << endl;
     // }
@@ -650,23 +694,43 @@ int main() {
     vector<string> dcg_name;
     Graph dcg = createDCG(automaton_producted, aut_name, dcg_name, ceg, responseEvents);
     cout << "DCGの作成が完了しました" << endl;
-
-    cout << "dcg_name: " << endl;
-    for (size_t i = 0; i < dcg_name.size(); i++) {
-        cout << i << " : " << dcg_name[i] << endl;
-    }
+    
+    // debug log
+    // cout << "dcg_name: " << endl;
+    // for (size_t i = 0; i < dcg_name.size(); i++) {
+    //     cout << i << " : " << dcg_name[i] << endl;
+    // }
 
     // 極大強連結成分の探索
     cout << "極大強連結成分の探索を開始します" << endl;
     Mscc mscc = searchSCC(dcg);
 
     // 受理条件を満たしていないインデックスの導出
-    find_non_accepting_indices(mscc, dcg_name);
+    auto non_accepting_indices = find_non_accepting_indices(mscc, dcg_name);
 
+    // LTL式の数
+    int num_of_ltl = dcg_name[0].length() - 1;
     // 強充足不能コアの導出
-
-
-    
+    vector<vector<int>> core = get_strongly_unsatisfiable_core(non_accepting_indices, num_of_ltl);
+    cout << "強充足不能コア: " << endl;
+    for (auto c: core) {
+        for (auto i: c) {
+            cout << i << " ";
+        }
+        cout << endl;
+    }
+    // 強充足不能コアのsizeの一番小さいものを取得
+    vector<int> min_core = core[0];
+    for (auto c: core) {
+        if (c.size() < min_core.size()) {
+            min_core = c;
+        }
+    }
+    cout << "極小の強充足不能コア: " << endl;
+    for (auto i: min_core) {
+        cout << i << " ";
+    }
+    cout << endl;
 
     return 0;
 }
