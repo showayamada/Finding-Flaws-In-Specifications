@@ -1,4 +1,4 @@
-# リアクティブシステムの仕様の欠陥範囲の特定をするツール
+# Finding-Flaws-In-Specifications
 
 You need to install go-task.  
 go-task[https://taskfile.dev/installation/]
