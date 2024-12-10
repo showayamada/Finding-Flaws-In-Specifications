@@ -1,7 +1,5 @@
 build/*
 .env
 config.cmake
-include/bin/*
-include/lib/*
-include/include/*
-include/share/*
+include/*
+.vscode

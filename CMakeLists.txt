@@ -11,13 +11,11 @@ set(CMAKE_CXX_COMPILER "g++")
 set(CMAKE_CXX_FLAGS "-pthread")
 
 # インクルードパスとライブラリパスを指定
-include(config.cmake)
-include_directories("${LIBRARY_PATH}/include")
-link_directories("${LIBRARY_PATH}/lib")
-
+include_directories("/root/usr/include")
+link_directories("/root/usr/lib")
 
 # ソースファイルの指定
-add_executable(ffs src/main.cpp)
+add_executable(ffs /root/ffs/src/main.cpp)
 
 # ライブラリをリンク
 target_link_libraries(ffs spot)

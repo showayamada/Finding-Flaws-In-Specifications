@@ -1,0 +1,21 @@
+version: '3'
+  
+silent: true
+
+tasks:
+  default:
+    aliases:
+      - list
+    desc: List all tasks
+    cmd: task -l
+
+  build:
+    desc: build the project
+    cmds: 
+      - cp .env.example .env
+      - docker compose build
+
+  run:
+    desc: run the project
+    cmds: 
+      - docker compose run -it --rm cmake bash -c "cd /root/ffs/build && cmake .. && make && ./ffs"
