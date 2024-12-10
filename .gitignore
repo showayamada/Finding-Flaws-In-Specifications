@@ -1,5 +1,5 @@
 build/*
+!/build/.gitkeep
 .env
-config.cmake
 include/*
-.vscode
+.vscode/**
