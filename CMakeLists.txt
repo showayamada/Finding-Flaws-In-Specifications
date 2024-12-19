@@ -11,11 +11,29 @@ set(CMAKE_CXX_COMPILER "g++")
 set(CMAKE_CXX_FLAGS "-pthread")
 
 # インクルードパスとライブラリパスを指定
-include_directories("/root/usr/include")
+#include_directories("/root/usr/include", "/root/ffs/src/modules")
 link_directories("/root/usr/lib")
 
+# ヘッダが入ってるディレクトリを洗い出すマクロ
+MACRO(HEADER_DIRECTORIES return_list)
+    FILE(GLOB_RECURSE new_list *.h)
+    SET(dir_list "")
+    FOREACH(file_path ${new_list})
+        GET_FILENAME_COMPONENT(dir_path ${file_path} PATH)
+        SET(dir_list ${dir_list} ${dir_path})
+    ENDFOREACH()
+    LIST(REMOVE_DUPLICATES dir_list)
+    SET(${return_list} ${dir_list})
+ENDMACRO()
+
+HEADER_DIRECTORIES(header_dir_list)
+list(LENGTH header_dir_list header_dir_list_count)
+message(STATUS "*h: ${header_dir_list_count}")
+message(${header_dir_list})
+include_directories(${header_dir_list})
+
 # ソースファイルの指定
-add_executable(ffs /root/ffs/src/main.cpp)
+add_executable(ffs /root/ffs/src/main.cpp /root/ffs/src/modules/input.cpp)
 
 # ライブラリをリンク
 target_link_libraries(ffs spot)

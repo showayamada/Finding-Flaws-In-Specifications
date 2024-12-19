@@ -62,6 +62,8 @@
 #include <boost/graph/strong_components.hpp>
 #include <boost/graph/graph_utility.hpp>
 
+#include "modules/input.hpp"
+
 using namespace std;
 using namespace spot;
 using namespace boost;
@@ -769,30 +771,21 @@ twa_graph_ptr projection_of_request_events(twa_graph_ptr automaton_producted, bd
 }
 
 int main() {
-    //! LTL式
-    vector<string> ltl_formula_str_list = {
-        "G(x1 -> F(y))",
-        "G(x2 -> !y)",
-        "G((x3 & y) -> (y U x2))"
-    };
-
-    //! 応答イベント
-    vector<string> response_events = {"y"};
-    //! 反例
-    string counterexample = "{x2}{x2,x3}({x1,x2}{x2,x3})";
+    ifstream input_file("../src/input.txt");
+    Input input = Input::load_input(input_file);
 
     // --- DEBUG LOG ---
     cout << "LTL formulas: " << endl;
-    for (auto ltl_formula_str: ltl_formula_str_list) {
+    for (auto ltl_formula_str: input.ltl_formula_str_list) {
         cout << ltl_formula_str << endl;
     }
     cout << "Response Events:" << endl;
-    for (auto responseEvent: response_events) {
+    for (auto responseEvent: input.response_events) {
         cout << responseEvent << endl;
     }
 
     //! sharedオートマトン
-    twa_graph_ptr shared = make_shared_dict(ltl_formula_str_list);
+    twa_graph_ptr shared = make_shared_dict(input.ltl_formula_str_list);
     //! 共有BDD辞書
     bdd_dict_ptr dict = shared->get_dict(); 
 
@@ -802,8 +795,8 @@ int main() {
     ParseCounterexample counterexample_parsed;
     CounterexampleGrammar<string::iterator> grammar;
     bool success = spirit::qi::phrase_parse(
-        counterexample.begin(),
-        counterexample.end(),
+        input.counterexample.begin(),
+        input.counterexample.end(),
         grammar,
         spirit::qi::space,
         counterexample_parsed
@@ -823,7 +816,7 @@ int main() {
     }
 
     // それぞれのLTL式からオートマトンを生成
-    vector<twa_graph_ptr> automaton_list = ltl_list_to_automaton(ltl_formula_str_list, dict);
+    vector<twa_graph_ptr> automaton_list = ltl_list_to_automaton(input.ltl_formula_str_list, dict);
 
     // オートマトンの同期積合成
 
@@ -852,7 +845,7 @@ int main() {
     // 命題変数を要求イベントだけに制限
     cout << "Creating projected automaton." << endl;
     //! 要求イベントのみを含むオートマトン
-    twa_graph_ptr automaton_projected = projection_of_request_events(automaton_producted, dict, response_events);
+    twa_graph_ptr automaton_projected = projection_of_request_events(automaton_producted, dict, input.response_events);
     cout << "Creating projected automaton successful!" << endl;
 
     // 反例をグラフにする
@@ -867,7 +860,7 @@ int main() {
     //! DCGのノードの名前
     vector<string> dcg_name;
     //! DCG
-    Graph dcg = createDCG(automaton_projected, aut_name, dcg_name, ceg, response_events);
+    Graph dcg = createDCG(automaton_projected, aut_name, dcg_name, ceg, input.response_events);
     cout << "Creating DCG successful!" << endl;
 
     // --- DEBUG LOG ---    

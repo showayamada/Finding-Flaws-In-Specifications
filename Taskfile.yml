@@ -10,12 +10,13 @@ tasks:
     cmd: task -l
 
   build:
-    desc: build the project
+    desc: Build the project
     cmds: 
       - cp .env.example .env
       - docker compose build
 
   run:
-    desc: run the project
+    desc: "Run the project. The first parameter is the LTL formula, and the second and subsequent parameters are response events."
+          
     cmds: 
       - docker compose run -it --rm cmake bash -c "cd /root/ffs/build && cmake .. && make && ./ffs"
