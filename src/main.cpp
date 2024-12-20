@@ -63,6 +63,7 @@
 #include <boost/graph/graph_utility.hpp>
 
 #include "modules/input.hpp"
+#include "modules/counterexample.hpp"
 
 using namespace std;
 using namespace spot;
@@ -119,20 +120,20 @@ map<K, V> filleter_keys(const map<K, V>& input, const vector<K>& keys_to_exclude
     return result;
 }
 
-//! edge property
-struct EdgeProperty {
-    string label;
-};
-//! vertex property
-struct VertexProperty {
-    string label;
-};
+// //! edge property
+// struct EdgeProperty {
+//     string label;
+// };
+// //! vertex property
+// struct VertexProperty {
+//     string label;
+// };
 
-//! 反例のグラフ
-typedef boost::adjacency_list<vecS, vecS, directedS, no_property, EdgeProperty> CEGraph;
-typedef boost::graph_traits<CEGraph>::edge_descriptor EdgeDescriptor;
-typedef boost::adjacency_list<boost::vecS, boost::vecS, boost::directedS, VertexProperty> Graph;
-typedef boost::graph_traits<Graph>::vertex_descriptor VertexDescriptor;
+// //! 反例のグラフ
+// typedef boost::adjacency_list<vecS, vecS, directedS, no_property, EdgeProperty> CEGraph;
+// typedef boost::graph_traits<CEGraph>::edge_descriptor EdgeDescriptor;
+// typedef boost::adjacency_list<boost::vecS, boost::vecS, boost::directedS, VertexProperty> Graph;
+// typedef boost::graph_traits<Graph>::vertex_descriptor VertexDescriptor;
 
 /**
  * @struct DCG
@@ -412,46 +413,6 @@ Graph createDCG(twa_graph_ptr& automaton, vector<string> aut_name, vector<string
 }
 
 /**
- * @struct ParseCounterexample
- * @brief 解析済みの反例
- * @param events イベントのリスト
- * @param w_events ωイベントのリスト
- */
-struct ParseCounterexample {
-    vector<string> events;
-    vector<string> w_events;
-};
-BOOST_FUSION_ADAPT_STRUCT(ParseCounterexample, events, w_events);
-
-/**
- * @struct CounterexampleGrammar
- * @brief 反例のパーサ
- */
-template <typename Iterator>
-struct CounterexampleGrammar : spirit::qi::grammar<Iterator, ParseCounterexample(), spirit::qi::space_type> {
-    CounterexampleGrammar() : CounterexampleGrammar::base_type(expr) {
-        using spirit::qi::lit;
-        using spirit::qi::char_;
-        using spirit::qi::lexeme;
-        using spirit::qi::alpha;
-        using spirit::qi::alnum;
-        using spirit::qi::space;
-        using spirit::qi::repeat;
-        using spirit::qi::int_;
-        using spirit::qi::attr;
-        using spirit::qi::eps;
-        expr = events >> w_events;        
-        single_expr = '{' >> lexeme[(char_("a-zA-Z") >> *char_("a-zA-Z0-9"))] >> *lexeme[(char_(','))] >> *lexeme[(char_("a-zA-Z") >> *char_("a-zA-Z0-9"))] >> '}';
-        w_events = '(' >> +single_expr >> ')';
-        events %= +single_expr;
-    }
-    spirit::qi::rule<Iterator, ParseCounterexample(), spirit::qi::space_type> expr;
-    spirit::qi::rule<Iterator, vector<string>(), spirit::qi::space_type> events;
-    spirit::qi::rule<Iterator, vector<string>(), spirit::qi::space_type> w_events;
-    spirit::qi::rule<Iterator, string(), spirit::qi::space_type> single_expr;
-};
-
-/**
  * @fn product_aut
  * @brief 2つのオートマトンの同期積を取る
  * @param left オートマトン
@@ -539,32 +500,32 @@ twa_graph_ptr synchronous_product(vector<twa_graph_ptr> automatons, twa_graph_pt
  * @param counterexample_parsed 解析済みの反例
  * @return 反例のグラフ
  */
-CEGraph createCounterExampleGraph(CEGraph& graph, ParseCounterexample& counterexample_parsed) {
-    vector<size_t> vertex_map;
-    size_t num_of_ce_node = counterexample_parsed.events.size() + counterexample_parsed.w_events.size();
-    for (size_t i = 0; i < num_of_ce_node; i++) {
-        vertex_map.push_back(add_vertex(graph));
-    }
-    for (size_t i = 0; i < vertex_map.size()-1; i++) {
-        EdgeDescriptor e;
-        if (i < counterexample_parsed.events.size()) {
-            e = add_edge(vertex_map[i], vertex_map[i+1], graph).first;
-            graph[e].label = counterexample_parsed.events[i];
-        } else {
-            e = add_edge(vertex_map[i], vertex_map[i+1], graph).first;
-            graph[e].label = counterexample_parsed.w_events[i-counterexample_parsed.events.size()];
-        }
-    }
-    EdgeDescriptor e;
-    e = add_edge(vertex_map[vertex_map.size()-1], vertex_map[counterexample_parsed.events.size()], graph).first;
-    graph[e].label = counterexample_parsed.w_events[counterexample_parsed.w_events.size()-1];
+// CEGraph createCounterExampleGraph(CEGraph& graph, ParseCounterexample& counterexample_parsed) {
+//     vector<size_t> vertex_map;
+//     size_t num_of_ce_node = counterexample_parsed.events.size() + counterexample_parsed.w_events.size();
+//     for (size_t i = 0; i < num_of_ce_node; i++) {
+//         vertex_map.push_back(add_vertex(graph));
+//     }
+//     for (size_t i = 0; i < vertex_map.size()-1; i++) {
+//         EdgeDescriptor e;
+//         if (i < counterexample_parsed.events.size()) {
+//             e = add_edge(vertex_map[i], vertex_map[i+1], graph).first;
+//             graph[e].label = counterexample_parsed.events[i];
+//         } else {
+//             e = add_edge(vertex_map[i], vertex_map[i+1], graph).first;
+//             graph[e].label = counterexample_parsed.w_events[i-counterexample_parsed.events.size()];
+//         }
+//     }
+//     EdgeDescriptor e;
+//     e = add_edge(vertex_map[vertex_map.size()-1], vertex_map[counterexample_parsed.events.size()], graph).first;
+//     graph[e].label = counterexample_parsed.w_events[counterexample_parsed.w_events.size()-1];
 
-    // --- DEBUG FILE ---
-    ofstream cegfile("ceg.dot");
-    write_graphviz(cegfile, graph, default_writer(), make_label_writer(get(&EdgeProperty::label, graph)));
+//     // --- DEBUG FILE ---
+//     ofstream cegfile("ceg.dot");
+//     write_graphviz(cegfile, graph, default_writer(), make_label_writer(get(&EdgeProperty::label, graph)));
 
-    return graph;
-}
+//     return graph;
+// }
 
 /**
  * @struct Mscc
@@ -789,31 +750,9 @@ int main() {
     //! 共有BDD辞書
     bdd_dict_ptr dict = shared->get_dict(); 
 
-    // 反例の解析
-
-    //! 解析済みの反例
-    ParseCounterexample counterexample_parsed;
-    CounterexampleGrammar<string::iterator> grammar;
-    bool success = spirit::qi::phrase_parse(
-        input.counterexample.begin(),
-        input.counterexample.end(),
-        grammar,
-        spirit::qi::space,
-        counterexample_parsed
-    );
-
-    // --- DEBUG LOG ---
-    if (success) {
-        cout << "Parsing successful! : " << endl;
-        for (auto e: counterexample_parsed.events) {
-            cout << "event: " << e << endl;
-        }
-        for (auto w: counterexample_parsed.w_events) {
-            cout << "w_event: " << w << endl;
-        }
-    } else {
-        cout << "Parsing failed." << endl;
-    }
+    // 反例の解析してグラフにする
+    ParseCounterexample counterexample_parsed = Counterexample::parse(input.counterexample);
+    CEGraph ceg = Counterexample::createCounterExampleGraph(counterexample_parsed);
 
     // それぞれのLTL式からオートマトンを生成
     vector<twa_graph_ptr> automaton_list = ltl_list_to_automaton(input.ltl_formula_str_list, dict);
@@ -848,12 +787,6 @@ int main() {
     twa_graph_ptr automaton_projected = projection_of_request_events(automaton_producted, dict, input.response_events);
     cout << "Creating projected automaton successful!" << endl;
 
-    // 反例をグラフにする
-    cout << "Creating counterexample graph." << endl;
-    //! 反例のグラフ
-    CEGraph ceg;
-    ceg = createCounterExampleGraph(ceg, counterexample_parsed);
-    cout << "Creating counterexample graph successful!" << endl;
 
     // 有向閉路グラフ(DCG)の作成
     cout << "Creating DCG." << endl;

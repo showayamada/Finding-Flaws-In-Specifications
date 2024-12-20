@@ -33,7 +33,7 @@ message(${header_dir_list})
 include_directories(${header_dir_list})
 
 # ソースファイルの指定
-add_executable(ffs /root/ffs/src/main.cpp /root/ffs/src/modules/input.cpp)
+add_executable(ffs /root/ffs/src/main.cpp /root/ffs/src/modules/input.cpp /root/ffs/src/modules/counterexample.cpp)
 
 # ライブラリをリンク
 target_link_libraries(ffs spot)

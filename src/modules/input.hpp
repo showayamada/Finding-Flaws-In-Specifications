@@ -12,14 +12,14 @@ using namespace std;
  */
 class Input {
 public:
+    vector<string> ltl_formula_str_list;
+    vector<string> response_events;
+    string counterexample;
     Input(
         vector<string> ltl_formula_str_list,
         vector<string> response_events,
         string counterexample
     );
-    vector<string> ltl_formula_str_list;
-    vector<string> response_events;
-    string counterexample;
 static Input load_input(ifstream& ifs);
 };
 
