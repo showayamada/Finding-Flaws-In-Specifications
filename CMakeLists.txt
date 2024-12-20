@@ -33,7 +33,9 @@ message(${header_dir_list})
 include_directories(${header_dir_list})
 
 # ソースファイルの指定
-add_executable(ffs /root/ffs/src/main.cpp /root/ffs/src/modules/input.cpp /root/ffs/src/modules/counterexample.cpp)
+#add_executable(ffs /root/ffs/src/main.cpp /root/ffs/src/modules/input.cpp /root/ffs/src/modules/counterexample.cpp /root/ffs/src/modules/automaton.cpp)
+file(GLOB_RECURSE source_list CONFIGURE_DEPENDS  "/root/ffs/src/*.cpp")
+add_executable(ffs ${source_list})
 
 # ライブラリをリンク
 target_link_libraries(ffs spot)

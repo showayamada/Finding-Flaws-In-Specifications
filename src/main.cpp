@@ -64,6 +64,7 @@
 
 #include "modules/input.hpp"
 #include "modules/counterexample.hpp"
+#include "modules/automaton.hpp"
 
 using namespace std;
 using namespace spot;
@@ -119,21 +120,6 @@ map<K, V> filleter_keys(const map<K, V>& input, const vector<K>& keys_to_exclude
 
     return result;
 }
-
-// //! edge property
-// struct EdgeProperty {
-//     string label;
-// };
-// //! vertex property
-// struct VertexProperty {
-//     string label;
-// };
-
-// //! 反例のグラフ
-// typedef boost::adjacency_list<vecS, vecS, directedS, no_property, EdgeProperty> CEGraph;
-// typedef boost::graph_traits<CEGraph>::edge_descriptor EdgeDescriptor;
-// typedef boost::adjacency_list<boost::vecS, boost::vecS, boost::directedS, VertexProperty> Graph;
-// typedef boost::graph_traits<Graph>::vertex_descriptor VertexDescriptor;
 
 /**
  * @struct DCG
@@ -494,40 +480,6 @@ twa_graph_ptr synchronous_product(vector<twa_graph_ptr> automatons, twa_graph_pt
 }
 
 /**
- * @fn createCounterExampleGraph
- * @brief 反例のグラフを作成する
- * @param graph グラフ
- * @param counterexample_parsed 解析済みの反例
- * @return 反例のグラフ
- */
-// CEGraph createCounterExampleGraph(CEGraph& graph, ParseCounterexample& counterexample_parsed) {
-//     vector<size_t> vertex_map;
-//     size_t num_of_ce_node = counterexample_parsed.events.size() + counterexample_parsed.w_events.size();
-//     for (size_t i = 0; i < num_of_ce_node; i++) {
-//         vertex_map.push_back(add_vertex(graph));
-//     }
-//     for (size_t i = 0; i < vertex_map.size()-1; i++) {
-//         EdgeDescriptor e;
-//         if (i < counterexample_parsed.events.size()) {
-//             e = add_edge(vertex_map[i], vertex_map[i+1], graph).first;
-//             graph[e].label = counterexample_parsed.events[i];
-//         } else {
-//             e = add_edge(vertex_map[i], vertex_map[i+1], graph).first;
-//             graph[e].label = counterexample_parsed.w_events[i-counterexample_parsed.events.size()];
-//         }
-//     }
-//     EdgeDescriptor e;
-//     e = add_edge(vertex_map[vertex_map.size()-1], vertex_map[counterexample_parsed.events.size()], graph).first;
-//     graph[e].label = counterexample_parsed.w_events[counterexample_parsed.w_events.size()-1];
-
-//     // --- DEBUG FILE ---
-//     ofstream cegfile("ceg.dot");
-//     write_graphviz(cegfile, graph, default_writer(), make_label_writer(get(&EdgeProperty::label, graph)));
-
-//     return graph;
-// }
-
-/**
  * @struct Mscc
  * @brief 極大強連結成分
  * @param component 極大強連結成分
@@ -655,82 +607,6 @@ vector<vector<int>> get_strongly_unsatisfiable_core(map<int, string> non_accepti
     return core;    
 }
 
-/**
- * @fn
- * @brief LTL式を解析し、オートマトンを生成する
- * @param ltl_formula_str_list LTL式のリスト(string[])
- * @return twa_graph_ptr 全てのLTL式を&で結合して生成したオートマトン
- */
-twa_graph_ptr make_shared_dict(vector<string> ltl_formula_str_list) {
-    string ltl_formula_str = std::accumulate(
-        ltl_formula_str_list.begin(), ltl_formula_str_list.end(), string(),
-        [](const string& a, const string& b) {
-            return a.empty() ? b : a + " & " + b;
-        }
-    );
-
-    formula f = parse_infix_psl(ltl_formula_str).f;
-    translator trans;
-
-    return trans.run(f);
-}
-
-/**
- * @fn
- * @brief 複数LTL式を解析し、それぞれオートマトンを生成する
- * @param ltl_formula_str_list LTL式のリスト(string[])
- * @param dict 共有BDD辞書
- * @return vector<twa_graph_ptr> LTL式を解析して生成したオートマトンのリスト
- */
-vector<twa_graph_ptr> ltl_list_to_automaton(vector<string> ltl_formula_str_list, bdd_dict_ptr dict) {
-    vector<twa_graph_ptr> automaton_list;
-    for (size_t i = 0; i < ltl_formula_str_list.size(); i++) {
-        parsed_formula parsed = parse_infix_psl(ltl_formula_str_list[i]);
-        formula formula = parsed.f;
-        translator translator(dict);
-        twa_graph_ptr automaton = translator.run(formula);
-        // オートマトンの各状態からある状態にtrueで遷移できるようにし、その状態からその状態にtrueの遷移を追加する
-        unsigned newState = automaton->new_state();
-        for (size_t i = 0; i < automaton->num_states(); i++) {
-            automaton->new_edge(i, newState, bddtrue);
-        }
-        automaton_list.push_back(automaton);
-
-        // --- DEBUG FILE ---
-        ofstream f("automaton" + to_string(i) + ".dot");
-        print_dot(f, automaton);
-        f.close();
-    }
-
-    return automaton_list;
-}
-
-/**
- * @fn projection_of_request_events
- * @brief 要求イベントのみを含むオートマトンを生成する
- * @param automaton_producted 同期積合成されたオートマトン
- * @param dict 共有BDD辞書
- * @param response_events 応答イベントのリスト
- * @return twa_graph_ptr 要求イベントのみを含むオートマトン
- */
-twa_graph_ptr projection_of_request_events(twa_graph_ptr automaton_producted, bdd_dict_ptr dict, vector<string> response_events) {
-    auto p_dict = automaton_producted->get_dict();
-    for (string res: response_events) {
-        parsed_formula res_parsed = parse_infix_psl(res);
-        int res_BDD_index = dict->var_map[res_parsed.f];
-        for (auto& t: automaton_producted->edges()) {
-            bdd res_BDD = bdd_ithvar(res_BDD_index);
-            t.cond = bdd_exist(t.cond, res_BDD);
-        }
-    }
-    // --- DEBUG FILE ---
-    ofstream projected("projected.dot");
-    print_dot(projected, automaton_producted);
-    projected.close();
-
-    return automaton_producted;
-}
-
 int main() {
     ifstream input_file("../src/input.txt");
     Input input = Input::load_input(input_file);
@@ -745,17 +621,16 @@ int main() {
         cout << responseEvent << endl;
     }
 
-    //! sharedオートマトン
-    twa_graph_ptr shared = make_shared_dict(input.ltl_formula_str_list);
-    //! 共有BDD辞書
-    bdd_dict_ptr dict = shared->get_dict(); 
+    HandleAutomaton automaton = HandleAutomaton::make_shared_dict(input.ltl_formula_str_list);
+    twa_graph_ptr shared = automaton.shared;
+    bdd_dict_ptr dict = automaton.dict;
+    // それぞれのLTL式からオートマトンを生成
+    vector<twa_graph_ptr> automaton_list = automaton.ltl_list_to_automaton(input.ltl_formula_str_list);
 
     // 反例の解析してグラフにする
     ParseCounterexample counterexample_parsed = Counterexample::parse(input.counterexample);
     CEGraph ceg = Counterexample::createCounterExampleGraph(counterexample_parsed);
 
-    // それぞれのLTL式からオートマトンを生成
-    vector<twa_graph_ptr> automaton_list = ltl_list_to_automaton(input.ltl_formula_str_list, dict);
 
     // オートマトンの同期積合成
 
@@ -782,10 +657,7 @@ int main() {
     // print_dot(cout, automaton_producted);
 
     // 命題変数を要求イベントだけに制限
-    cout << "Creating projected automaton." << endl;
-    //! 要求イベントのみを含むオートマトン
-    twa_graph_ptr automaton_projected = projection_of_request_events(automaton_producted, dict, input.response_events);
-    cout << "Creating projected automaton successful!" << endl;
+    twa_graph_ptr automaton_projected = HandleAutomaton::projection_of_request_events(automaton_producted, dict, input.response_events);
 
 
     // 有向閉路グラフ(DCG)の作成
