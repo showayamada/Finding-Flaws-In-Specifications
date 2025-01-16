@@ -3,6 +3,10 @@
 #include <fstream>
 #include <string>
 #include <vector>
+#include <boost/property_tree/ptree.hpp>
+#include <boost/property_tree/json_parser.hpp>
+
+using namespace boost::property_tree;
 
 
 Input::Input(
@@ -23,26 +27,27 @@ Input Input::load_input(ifstream& ifs) {
         cout << "Failed to open input.txt" << endl;
         exit(1);
     }
-    string line;
-    string section;
-    while (getline(ifs, line)){
-        if (line.empty()) continue;
-        if (line == "LTL_FORMULAS:") {
-            section = "ltl";
-        } else if (line == "RESPONSE_EVENTS:") {
-            section = "response";
-        } else if (line == "COUNTEREXAMPLE:") {
-            section = "counterexample";
-        } else {
-            if (section == "ltl") {
-                ltl_formula_str_list.push_back(line);
-            } else if (section == "response") {
-                response_events.push_back(line);
-            } else if (section == "counterexample") {
-                counterexample = line;
+    ptree pt;
+    try {
+        read_json(ifs, pt);
+        if (pt.get_child_optional("guarantees")) {
+            for (const auto& formula : pt.get_child("guarantees")) {
+                ltl_formula_str_list.push_back(formula.second.get_value<string>());
             }
         }
+        if (pt.get_child_optional("outputs")) {
+            for (const auto& response_event : pt.get_child("outputs")) {
+                response_events.push_back(response_event.second.get_value<string>());
+            }
+        }
+        if (pt.get_child_optional("counterexample")) {
+            counterexample = pt.get_child("counterexample").get_value<string>();
+        }
+    } catch (json_parser_error& e) {
+        cout << "Failed to parse input.json" << endl;
+        exit(1);
     }
+
     return {
         ltl_formula_str_list,
         response_events,

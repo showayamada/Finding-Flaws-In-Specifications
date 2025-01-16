@@ -1,0 +1,12 @@
+{
+	"semantics": "mealy",
+	"inputs":  ["x1", "x2", "x3"],
+	"outputs": ["y"],
+	"assumptions": [],
+	"guarantees": [
+        "G(x1 -> F(y))",
+        "G(x2 -> !y)",
+        "G((x3 & y) -> (y U x2))"
+	],
+    "counterexample": "{x2}{x2,x3}({x1,x2}{x2,x3})"
+}

@@ -7,7 +7,7 @@
 
 int main() {
     //ifstream input_file("../src/elebater2.txt");
-    ifstream input_file("../src/input.txt");
+    ifstream input_file("../src/input.json");
     Input input = Input::load_input(input_file);
 
     // --- DEBUG LOG ---
@@ -19,6 +19,7 @@ int main() {
     for (auto responseEvent: input.response_events) {
         cout << responseEvent << endl;
     }
+    cout << "Counterexample: " << input.counterexample << endl;
 
     HandleAutomaton automaton = HandleAutomaton::make_shared_dict(input.ltl_formula_str_list);
     twa_graph_ptr shared = automaton.shared;
