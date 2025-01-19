@@ -1,0 +1,23 @@
+{
+	"semantics": "mealy",
+	"inputs":  ["locbtn1", "locbtn2", "openbtn","closebtn"],
+	"outputs": ["loc1","loc2","reqloc1","reqloc2","open","movable","opentimedout","reqopen"],
+	"assumptions": [],
+	"guarantees": [
+		"G(loc1 | loc2) ",
+		"G(loc1 -> ! loc2) & G(loc2 -> ! loc1) ",
+		"G(locbtn1 -> F loc1 & reqloc W(loc1 & reqloc1))",
+		"G(loc1 & reqloc1 -> open & (loc1 W movable)) ",
+		"G(loc2 & reqloc2 -> open & (loc2 W movable))",
+		"G(loc1 & movable -> (! reqloc1) W locbtn1) & G(loc2 & movable -> (! reqloc2) W locbtn2)",
+		"G(loc1 & ! reqloc1 -> ! open) & G(loc2 & ! reqloc2 -> ! open)",
+		"G(open -> (! movable) W ! open)",
+		"G(! open -> movable W open)",
+		"G(open -> F opentimedout)",
+		"G(openbtn & ! opentimedout -> reqopen)",
+		"G(opentimedout -> ! open)",
+		"G(closebtn & ! reqopen -> ! open)",
+		"G(reqopen & ! movable -> open)" 
+	],
+	"counterexample": "{loc1}{loc1,openbtn}({loc1,closebtn}{loc1,openbtn})"
+}
